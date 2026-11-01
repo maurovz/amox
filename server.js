@@ -24,9 +24,6 @@ const CLI = path.join(ROOT, 'cli.js');
 const STATUSES = ['backlog', 'ready', 'in_progress', 'review', 'done'];
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1'];
 const DEFAULT_PERMISSION_MODE = 'bypassPermissions';
-// How every agent should answer. Override with "style" in projects.json.
-const DEFAULT_STYLE = 'Be brief. Lead with the answer in a few short sentences. '
-  + 'No headings, no tables, no long reports, do not restate the question. Use a short list only for steps or options.';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
   console.error(`Refusing to listen on ${HOST} without BOARD_TOKEN. Set it in .env.`);
@@ -120,7 +117,7 @@ function buildConfig(raw) {
   const order = Array.isArray(raw.order) ? raw.order : [];
   const rank = (p) => (order.includes(p.id) ? order.indexOf(p.id) : Infinity);
   projects.sort((a, b) => rank(a) - rank(b));
-  return { lead, projects, style: typeof raw.style === 'string' ? raw.style : DEFAULT_STYLE };
+  return { lead, projects };
 }
 
 let config;
@@ -409,29 +406,16 @@ function taskPrompt(card) {
   return [card.title, card.details].filter(Boolean).join('\n\n');
 }
 
-// work = the card was started (Start, Resume, Redo). Otherwise the user is
-// replying on the card, usually a question about the work already done.
-function taskSystemPrompt(card, project, work) {
-  const lines = [
-    `You are a task agent started from the user's kanban board for card ${card.id} ("${card.title}") in project "${project.name || project.id}".`,
-    `Work only inside ${project.path}.`,
-    'Do not push to any remote unless the card asks you to.',
-  ];
-  if (work) {
-    lines.push(
-      'If you need a decision from the user, ask it clearly as your final message and stop. They will reply on the card.',
-      'When done, end with two or three lines: what changed and how to check it.',
-    );
-  } else {
-    lines.push('The user is replying on the card. Answer exactly what they wrote. Do not redo or continue the task, '
-      + 'and do not inspect the repo, unless the reply asks for that.');
-  }
-  lines.push(config.style);
-  return lines.join(' ');
+// The same short context on every message. A card is just a Claude Code
+// session: replies go through as written, like typing in a terminal. How
+// to answer (length, tone) comes from the user's own CLAUDE.md files.
+function taskSystemPrompt(card, project) {
+  return `You're working on card ${card.id} ("${card.title}") from the user's board, in ${project.path}. `
+    + 'Do not push to any remote unless asked.';
 }
 
-// work = Start / Resume / Redo: the card moves to In progress. A reply is a
-// follow-up: the card stays where it is (usually Review) while it's answered.
+// work = Start / Resume / Redo: the card moves to In progress. A reply just
+// continues the session; the card stays in its column while it's answered.
 function enqueue(card, prompt, { work = false } = {}) {
   if (work) card.status = 'in_progress';
   card.run = { state: 'queued', prompt, work, queuedAt: now() };
@@ -477,16 +461,10 @@ function runCard(card) {
   if (!project) return finish(card, { state: 'failed', error: `Unknown project ${card.project}` });
   // Remember how the repo(s) looked before the card first touched them, so
   // Reject / Redo can put them back.
-  if (card.run.work && !card.baseline) {
+  if (!card.baseline) {
     try { card.baseline = snapshot(card, project.path); } catch (err) { console.warn(`[board] snapshot ${card.id}: ${err.message}`); }
   }
-  // Replies carry the "just answer, briefly" rule in the message itself: in a
-  // long session Claude follows that more reliably than the system prompt.
-  // The transcript shows only what the user wrote.
-  const prompt = card.run.work ? card.run.prompt
-    : `[Board note: this is a follow-up on the card, not a new task. Answer only this, briefly. ${config.style} `
-      + `Don't redo the task or check the repo unless asked.]\n\n${card.run.prompt}`;
-  projectRun(card, project, taskSystemPrompt(card, project, card.run.work), prompt);
+  projectRun(card, project, taskSystemPrompt(card, project), card.run.prompt);
 }
 
 function runChat(key, text) {
@@ -497,12 +475,12 @@ function runChat(key, text) {
   if (key !== 'main') {
     const project = projectById(key);
     const system = `The user is chatting with you from their board, in project "${project.name || project.id}". `
-      + `Work only inside ${project.path}. Do not push to any remote unless the user asks. ${config.style}`;
+      + `Work only inside ${project.path}. Do not push to any remote unless the user asks.`;
     return projectRun(chat, project, system, text);
   }
   const { cwd } = config.lead;
   const cli = path.relative(cwd, CLI);
-  const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli) + `\n\n${config.style}`;
+  const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli);
   const tools = [`Bash(node ${CLI}:*)`, `Bash(node ${cli}:*)`, 'Read', 'Glob', 'Grep', 'Edit', 'Write'];
   const args = [...baseArgs(config.lead.permissionMode), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
   for (const dir of config.lead.addDirs) args.push('--add-dir', dir);

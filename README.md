@@ -17,7 +17,7 @@ Open http://127.0.0.1:4700.
 - **Tab order:** drag project tabs to reorder them (on a phone, hold a tab, then drag). Main stays first. Saved as `order` in `projects.json`.
 - **Columns:** Backlog, Ready, In progress, Review, Done.
 - **In progress = go.** Moving a card there runs `claude -p` inside that project's folder, so it loads only that project's `CLAUDE.md` and memory, as if you opened Claude Code there. When it ends, the card moves to Review.
-- **Reply** on a card to ask or add something in the same session. A reply is treated as a question: the card stays in its column, and the agent answers briefly without redoing the task unless you ask. **Stop** kills a run.
+- **Reply** on a card to ask or add something in the same session. A card is one Claude Code session and a reply is the next message, exactly like a terminal. The card stays in its column while it's answered. How long and how the agents answer comes from your `CLAUDE.md` files (global `~/.claude/CLAUDE.md` and the project's), as in the terminal. **Stop** kills a run.
 - **Review buttons** (fixed actions, the agent isn't asked anything):
   - **Approve**: keep the changes, move to Done.
   - **Reject**: revert the card's changes, back to Ready with a fresh session.
@@ -39,8 +39,6 @@ Open http://127.0.0.1:4700.
 - `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
 - `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
 - `allowedTools`: extra rules, e.g. `["Bash(npm install:*)"]`.
-
-Top level `style`: how every agent answers. Default: brief, lead with the answer, no headings or long reports.
 
 Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows as "Not allowed: …".
 

@@ -4,7 +4,7 @@ Newest first.
 
 ## 2026-11-01. Review is decided by buttons, not by the agent
 
-Asking "summary" on a card made the agent check the repo and report again: every reply resent "end with what changed", and nothing said to be brief. Now replies get a "just answer" prompt, every agent gets a short-answers style (`style` in `projects.json`), and Approve / Reject / Redo are fixed actions. Reject and Redo revert through git snapshots taken before the card's first run, and refuse when the work was pushed.
+Asking "summary" on a card made the agent check the repo and report again, because every reply resent "end with what changed". A card is now plainly one Claude Code session: the same two-line context on every message, replies passed as written, and answer style left to the user's `CLAUDE.md` files (a first attempt with separate reply prompts and injected style notes was dropped as over-engineered). Approve / Reject / Redo are fixed actions. Reject and Redo revert through git snapshots taken before the card's first run, and refuse when the work was pushed.
 
 ## 2026-11-01. Projects are discovered from the root folder
 
