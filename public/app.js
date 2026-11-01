@@ -233,14 +233,13 @@ function renderTabs() {
 
 function renderChatControls() {
   const busy = !!state.chats[tab]?.busy;
-  $('#chatStop').hidden = !busy;
   const arch = $('#chatArchive');
   arch.hidden = tab === 'main';
   arch.textContent = isArchived(tab) ? 'Unarchive' : 'Archive';
   arch.title = isArchived(tab) ? 'Move back to the active projects' : 'Move its folder into the archive folder and hide its cards from Main';
   arch.disabled = busy;
   $('#chatReset').disabled = busy;
-  $('#chatForm button').disabled = busy;
+  setComposerBusy($('#chatForm'), busy);
   $('#chatHint').textContent = tab === 'main'
     ? 'Main brain. Sees every project and the board.'
     : `Claude Code in the ${projectName(tab)} folder.`;
@@ -354,7 +353,6 @@ $('#tabs').addEventListener('click', (e) => {
   const t = e.target.closest('.tab');
   if (t && t.dataset.tab !== tab) selectTab(t.dataset.tab);
 });
-$('#chatStop').addEventListener('click', guard(() => api('POST', `/api/chats/${tab}/stop`)));
 $('#chatArchive').addEventListener('click', guard(async () => {
   const id = tab;
   if (isArchived(id)) {
@@ -430,7 +428,7 @@ splitter.addEventListener('keydown', (e) => {
   const w = $('.chat').getBoundingClientRect().width;
   setChatWidth(w + (e.key === 'ArrowLeft' ? 24 : -24));
 });
-composer($('#chatForm'), (text) => api('POST', `/api/chats/${tab}`, { text }));
+composer($('#chatForm'), (text) => api('POST', `/api/chats/${tab}`, { text }), () => api('POST', `/api/chats/${tab}/stop`));
 
 // ---------- card sheet ----------
 
@@ -462,14 +460,14 @@ function renderCardSheet(full) {
   $('#cardStatus').innerHTML = state.statuses.map((s) =>
     `<button type="button" class="pill${card.status === s ? ' on' : ''}" data-status="${s}">${LABELS[s]}</button>`).join('');
   const running = !!card.run;
-  $('#cardStop').hidden = !running;
   $('#cardStart').hidden = running;
   $('#cardStart').textContent = card.sessionId ? 'Resume ▶' : 'Start ▶';
   $('#cardDelete').disabled = running;
   $('#cardReview').hidden = running || card.status !== 'review';
   const reply = $('#cardReply');
   reply.hidden = !card.sessionId;
-  reply.querySelector('button').disabled = running;
+  setComposerBusy(reply, running);
+  $('#cardStop').hidden = !running || !reply.hidden; // queued before a session: no composer yet
   const working = card.run?.state === 'running' ? 'Working'
     : card.run?.state === 'queued' ? `Queued, waiting for ${projectName(card.project)}` : '';
   setWorking($('#cardLog'), working);
@@ -526,7 +524,7 @@ $('#cardDetails').addEventListener('input', () => {
 $('#cardDetails').addEventListener('blur', guard(saveDetails));
 cardDlg.addEventListener('close', () => { saveDetails().catch(() => {}); openCardId = null; });
 
-composer($('#cardReply'), (text) => api('POST', `/api/cards/${openCardId}/reply`, { text }));
+composer($('#cardReply'), (text) => api('POST', `/api/cards/${openCardId}/reply`, { text }), () => api('POST', `/api/cards/${openCardId}/stop`));
 
 // ---------- new card ----------
 
@@ -561,12 +559,21 @@ $('#newForm').addEventListener('submit', guard(async (e) => {
 
 // ---------- shared ----------
 
-function composer(form, sendFn) {
+// Send turns into Stop while the agent works; Esc stops too, like the terminal.
+function composer(form, sendFn, stopFn) {
   const ta = form.querySelector('textarea');
+  const stopBtn = document.createElement('button');
+  stopBtn.type = 'button';
+  stopBtn.className = 'btn danger';
+  stopBtn.textContent = 'Stop';
+  stopBtn.hidden = true;
+  stopBtn.addEventListener('click', guard(stopFn));
+  form.append(stopBtn);
   const grow = () => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
   ta.addEventListener('input', grow);
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !touch && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+    if (e.key === 'Escape' && !stopBtn.hidden) { e.preventDefault(); e.stopPropagation(); stopBtn.click(); }
   });
   form.addEventListener('submit', guard(async (e) => {
     e.preventDefault();
@@ -576,6 +583,13 @@ function composer(form, sendFn) {
     ta.value = '';
     grow();
   }));
+}
+
+function setComposerBusy(form, busy) {
+  const [send, stop] = form.querySelectorAll('button');
+  send.hidden = busy;
+  send.disabled = busy;
+  stop.hidden = !busy;
 }
 
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
