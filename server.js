@@ -26,7 +26,7 @@ const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1'];
 const DEFAULT_PERMISSION_MODE = 'bypassPermissions';
 // How every agent should answer. Override with "style" in projects.json.
 const DEFAULT_STYLE = 'Be brief. Lead with the answer in a few short sentences. '
-  + 'No headings, no long reports, do not restate the question. Use a short list only for steps or options.';
+  + 'No headings, no tables, no long reports, do not restate the question. Use a short list only for steps or options.';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
   console.error(`Refusing to listen on ${HOST} without BOARD_TOKEN. Set it in .env.`);
@@ -430,8 +430,10 @@ function taskSystemPrompt(card, project, work) {
   return lines.join(' ');
 }
 
+// work = Start / Resume / Redo: the card moves to In progress. A reply is a
+// follow-up: the card stays where it is (usually Review) while it's answered.
 function enqueue(card, prompt, { work = false } = {}) {
-  card.status = 'in_progress';
+  if (work) card.status = 'in_progress';
   card.run = { state: 'queued', prompt, work, queuedAt: now() };
   card.updatedAt = now();
   appendLog(card.id, { kind: 'user', text: prompt });
@@ -478,7 +480,13 @@ function runCard(card) {
   if (card.run.work && !card.baseline) {
     try { card.baseline = snapshot(card, project.path); } catch (err) { console.warn(`[board] snapshot ${card.id}: ${err.message}`); }
   }
-  projectRun(card, project, taskSystemPrompt(card, project, card.run.work), card.run.prompt);
+  // Replies carry the "just answer, briefly" rule in the message itself: in a
+  // long session Claude follows that more reliably than the system prompt.
+  // The transcript shows only what the user wrote.
+  const prompt = card.run.work ? card.run.prompt
+    : `[Board note: this is a follow-up on the card, not a new task. Answer only this, briefly. ${config.style} `
+      + `Don't redo the task or check the repo unless asked.]\n\n${card.run.prompt}`;
+  projectRun(card, project, taskSystemPrompt(card, project, card.run.work), prompt);
 }
 
 function runChat(key, text) {
@@ -585,7 +593,7 @@ function finish(entity, lastRun) {
 function stop(entity) {
   if (entity.run?.state === 'queued') {
     entity.run = null;
-    entity.status = entity.sessionId ? 'review' : 'ready';
+    if (entity.status === 'in_progress') entity.status = entity.sessionId ? 'review' : 'ready';
     appendLog(entity.id, { kind: 'system', text: 'Removed from queue' });
     changed();
     return;

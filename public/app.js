@@ -37,9 +37,24 @@ function mdBlocks(text) {
     if (list) out.push(`<${list.tag}>${list.items.map((x) => `<li>${mdInline(x)}</li>`).join('')}</${list.tag}>`);
     list = null;
   };
-  for (const line of text.split('\n')) {
+  const lines = text.split('\n');
+  const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     let m;
     if (!line.trim()) { flushPara(); flushList(); continue; }
+    // Table: a | row followed by a |---| separator row.
+    if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1] || '')) {
+      flushPara(); flushList();
+      const head = cells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(cells(lines[i++]));
+      i--;
+      out.push(`<div class="tbl"><table><thead><tr>${head.map((c) => `<th>${mdInline(c)}</th>`).join('')}</tr></thead>`
+        + `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${mdInline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      continue;
+    }
     if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushPara(); flushList(); out.push('<hr>'); continue; }
     if ((m = line.match(/^\s{0,3}#{1,6}\s+(.*)$/))) { flushPara(); flushList(); out.push(`<p class="h">${mdInline(m[1])}</p>`); continue; }
     if ((m = line.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)$/))) {

@@ -275,6 +275,10 @@ dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 .ev.text li { margin: 2px 0; }
 .ev.text hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
 .review { border-top: 1px solid var(--border); padding-top: 8px; }
+.ev.text .tbl { overflow-x: auto; margin: 0 0 8px; }
+.ev.text table { border-collapse: collapse; font-size: 13px; }
+.ev.text th, .ev.text td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; white-space: nowrap; }
+.ev.text th { background: var(--code); font-weight: 600; }
 .ev.tool { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 .ev.tool::before { content: "› "; }
 .ev.tool_error, .ev.error { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--danger); white-space: pre-wrap; }

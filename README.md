@@ -17,7 +17,7 @@ Open http://127.0.0.1:4700.
 - **Tab order:** drag project tabs to reorder them (on a phone, hold a tab, then drag). Main stays first. Saved as `order` in `projects.json`.
 - **Columns:** Backlog, Ready, In progress, Review, Done.
 - **In progress = go.** Moving a card there runs `claude -p` inside that project's folder, so it loads only that project's `CLAUDE.md` and memory, as if you opened Claude Code there. When it ends, the card moves to Review.
-- **Reply** on a card to ask or add something in the same session. A reply is treated as a question: the agent answers it and doesn't redo the task unless you ask. **Stop** kills a run.
+- **Reply** on a card to ask or add something in the same session. A reply is treated as a question: the card stays in its column, and the agent answers briefly without redoing the task unless you ask. **Stop** kills a run.
 - **Review buttons** (fixed actions, the agent isn't asked anything):
   - **Approve**: keep the changes, move to Done.
   - **Reject**: revert the card's changes, back to Ready with a fresh session.
