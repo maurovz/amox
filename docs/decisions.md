@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-01. Cards report back to Main
+
+Main said "I'll show you the commit when c1 finishes" and never did: it only runs when it gets a message. Now, when a run that Main started or replied to ends (finished or failed, not stopped), the board sends Main a `[Board]` message with the card's last reply, queued if Main is busy, and Main tells the user. `cli.js` marks Main's calls with `x-board-from: main`. Runs the user starts from the UI don't notify, so Main isn't woken for nothing.
+
 ## 2026-11-01. Review is decided by buttons, not by the agent
 
 Asking "summary" on a card made the agent check the repo and report again, because every reply resent "end with what changed". A card is now plainly one Claude Code session: the same two-line context on every message, replies passed as written, and answer style left to the user's `CLAUDE.md` files (a first attempt with separate reply prompts and injected style notes was dropped as over-engineered). Approve / Reject / Redo are fixed actions. Reject and Redo revert through git snapshots taken before the card's first run, and refuse when the work was pushed.

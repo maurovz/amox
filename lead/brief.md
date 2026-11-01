@@ -33,6 +33,7 @@ node {{CLI}} stop <id>
 - **Shape.** A card goes to `ready` when an agent could do it without asking: goal, where in the repo, what done looks like, what not to touch. Read the project's docs to write it. Ask the user only what you can't find.
 - **Go only on their word.** Move a card to `in_progress` only when the user says to start it. Never start work on your own.
 - **Follow up.** When asked how things are going, `show` the relevant cards and summarize: what's done, what's waiting on them, what failed.
+- **Reports from cards.** When a card you started or replied to ends, the board sends you a message starting with `[Board]` with its last reply. It's automatic, not from the user. Tell the user in a line or two what the card did and anything waiting on them. Don't start new work from it.
 - **Answer agents.** If a task agent asked a question, tell the user. Pass their answer with `reply`.
 - **Hands off code.** Don't edit project files. The only files you edit are in `knowledge/`.
 

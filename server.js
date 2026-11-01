@@ -429,9 +429,11 @@ function taskSystemPrompt(card, project) {
 
 // work = Start / Resume / Redo: the card moves to In progress. A reply just
 // continues the session; the card stays in its column while it's answered.
-function enqueue(card, prompt, { work = false } = {}) {
+// fromMain: Main started this run or replied (cli.js sends x-board-from: main).
+// When such a run ends, Main is told (see tellMain).
+function enqueue(card, prompt, { work = false, fromMain = false } = {}) {
   if (work) card.status = 'in_progress';
-  card.run = { state: 'queued', prompt, work, queuedAt: now() };
+  card.run = { state: 'queued', prompt, work, fromMain, queuedAt: now() };
   card.updatedAt = now();
   appendLog(card.id, { kind: 'user', text: prompt });
   changed();
@@ -481,11 +483,11 @@ function runCard(card) {
   projectRun(card, project, taskSystemPrompt(card, project), card.run.prompt);
 }
 
-function runChat(key, text) {
+function runChat(key, text, { notice } = {}) {
   const chat = getChat(key);
   if (chat.run) throw httpError(409, 'This chat is busy');
   chat.run = { state: 'queued', prompt: text, queuedAt: now() };
-  appendLog(chat.id, { kind: 'user', text });
+  appendLog(chat.id, notice ? { kind: 'system', text: notice } : { kind: 'user', text });
   if (key !== 'main') {
     const project = projectById(key);
     const system = `The user is chatting with you from their board, in project "${project.name || project.id}". `
@@ -499,7 +501,7 @@ function runChat(key, text) {
   const args = [...baseArgs(config.lead), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
   for (const dir of config.lead.addDirs) args.push('--add-dir', dir);
   if (chat.sessionId) args.push('--resume', chat.sessionId);
-  const env = { ...process.env, BOARD_URL: `http://127.0.0.1:${PORT}`, BOARD_TOKEN: TOKEN };
+  const env = { ...process.env, BOARD_URL: `http://127.0.0.1:${PORT}`, BOARD_TOKEN: TOKEN, BOARD_FROM: 'main' };
   launch(chat, cwd, args, text, env);
 }
 
@@ -566,6 +568,7 @@ function launch(entity, cwd, args, prompt, env) {
 }
 
 function finish(entity, lastRun) {
+  const run = entity.run;
   entity.run = null;
   entity.lastRun = { ...lastRun, endedAt: now() };
   if (entity.status === 'in_progress') entity.status = 'review';
@@ -580,6 +583,27 @@ function finish(entity, lastRun) {
   appendLog(entity.id, { kind: lastRun.state === 'failed' ? 'error' : 'system', text });
   changed();
   pump();
+  if (run?.fromMain && lastRun.state !== 'stopped') tellMain(entity, lastRun);
+  if (entity === db.lead) flushMainInbox();
+}
+
+// Main only runs when it gets a message, so a card it started can't report
+// back by itself. When one ends, the board sends Main a notice with the
+// card's last reply (queued while Main is busy) and Main tells the user.
+function tellMain(card, lastRun) {
+  const last = readLog(card.id).reverse().find((e) => e.kind === 'text')?.text || '(no reply)';
+  const ended = lastRun.state === 'done' ? 'finished' : 'failed';
+  const text = `[Board] Card ${card.id} "${card.title}" (${card.project}) ${ended}, now in ${card.status}. Its last reply:\n\n`
+    + (last.length > 6000 ? last.slice(0, 6000) + '\n[…cut]' : last);
+  (db.lead.inbox ||= []).push({ text, notice: `Card ${card.id} ${ended}. Telling Main.` });
+  changed();
+  flushMainInbox();
+}
+
+function flushMainInbox() {
+  if (db.lead.run || !db.lead.inbox?.length) return;
+  const items = db.lead.inbox.splice(0);
+  runChat('main', items.map((i) => i.text).join('\n\n---\n\n'), { notice: items.map((i) => i.notice).join(' ') });
 }
 
 function stop(entity) {
@@ -701,6 +725,7 @@ async function handle(req, res) {
   if (!authorize(req, res, url)) return;
   const p = url.pathname;
   const m = req.method;
+  const fromMain = req.headers['x-board-from'] === 'main';
 
   if (m === 'GET' && STATIC[p]) {
     const [file, type] = STATIC[p];
@@ -731,7 +756,7 @@ async function handle(req, res) {
       createdAt: now(), updatedAt: now(),
     };
     db.cards.push(card);
-    if (status === 'in_progress') enqueue(card, taskPrompt(card), { work: true });
+    if (status === 'in_progress') enqueue(card, taskPrompt(card), { work: true, fromMain });
     else changed();
     return send(res, 201, card);
   }
@@ -760,7 +785,7 @@ async function handle(req, res) {
         if (b.status === 'in_progress') {
           const prompt = b.message?.trim()
             || (card.sessionId ? `Continue. Current card:\n\n${taskPrompt(card)}` : taskPrompt(card));
-          enqueue(card, prompt, { work: true });
+          enqueue(card, prompt, { work: true, fromMain });
           return send(res, 200, card);
         }
         if (card.run?.state === 'running') throw httpError(409, 'Card is running. Stop it first.');
@@ -787,7 +812,7 @@ async function handle(req, res) {
       const b = await readBody(req);
       if (!b.text?.trim()) throw httpError(400, 'Text required');
       if (card.run) throw httpError(409, 'Card is already running');
-      enqueue(card, b.text.trim());
+      enqueue(card, b.text.trim(), { fromMain });
       return send(res, 200, card);
     }
 
@@ -921,4 +946,5 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 server.listen(PORT, HOST, () => {
   console.log(`Board on http://${HOST}:${PORT}${TOKEN ? ' (token required)' : ''}`);
   pump();
+  flushMainInbox(); // notices left from before a restart
 });

@@ -25,7 +25,7 @@ Open http://127.0.0.1:4700.
 
   Revert uses git. Before a card first runs, the board records each repo in the project folder (the folder itself, or its direct subfolders for multi-repo folders): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
 - One running card per project at a time, since they share the working tree. Others wait as Queued.
-- **Main** is a Claude session in the root projects folder (`lead.cwd` in `projects.json`, default: the folder that holds this repo). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. Its brief is `lead/brief.md`.
+- **Main** is a Claude session in the root projects folder (`lead.cwd` in `projects.json`, default: the folder that holds this repo). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, the board sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
 - **The board is a project too** (`board` tab). Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
 
 ## Projects

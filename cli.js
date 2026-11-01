@@ -37,7 +37,12 @@ function parse(argv) {
 async function api(method, url, body) {
   const res = await fetch(BASE + url, {
     method,
-    headers: { 'content-type': 'application/json', ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}),
+      // Set by the board for Main, so cards Main starts report back to it.
+      ...(process.env.BOARD_FROM ? { 'x-board-from': process.env.BOARD_FROM } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
