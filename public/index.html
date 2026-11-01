@@ -36,6 +36,7 @@
         <span class="grow"></span>
         <button id="chatArchive" class="btn ghost" hidden></button>
         <button id="chatReset" class="btn" title="Clear this chat and start a new conversation">Clear</button>
+        <button id="chatSettings" class="icon" aria-label="Settings" title="Settings for this tab">⚙</button>
         <button id="chatCollapse" class="icon" aria-label="Collapse chat" title="Collapse chat">⇥</button>
       </div>
       <div id="chatLog" class="log"></div>
@@ -95,6 +96,20 @@
         <option value="in_progress">Start now</option>
       </select>
       <button class="btn primary">Create</button>
+    </form>
+  </dialog>
+
+  <!-- Tab settings -->
+  <dialog id="settingsDlg" class="sheet small-sheet">
+    <form id="settingsForm" class="stack">
+      <div class="sheet-head">
+        <button type="button" class="icon" data-close aria-label="Close">✕</button>
+        <strong id="settingsTitle">Settings</strong>
+      </div>
+      <label class="field"><span class="muted small">Model</span><select name="model"></select></label>
+      <label class="field"><span class="muted small">Effort</span><select name="effort"></select></label>
+      <p class="muted small">Used by this tab's chat and its cards, from the next message on.</p>
+      <button class="btn primary">Save</button>
     </form>
   </dialog>
 

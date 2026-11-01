@@ -37,6 +37,7 @@ Open http://127.0.0.1:4700.
 `projects.json` (optional, not committed, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
 
 - `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
+- `model` and `effort`: default `opus` (the latest Opus) and `high`. Set them from **⚙** in the chat pane, per tab: Main's go under `lead`, a project's apply to its chat and its cards, from the next message on.
 - `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
 - `allowedTools`: extra rules, e.g. `["Bash(npm install:*)"]`.
 

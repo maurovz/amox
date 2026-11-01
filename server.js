@@ -24,6 +24,12 @@ const CLI = path.join(ROOT, 'cli.js');
 const STATUSES = ['backlog', 'ready', 'in_progress', 'review', 'done'];
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1'];
 const DEFAULT_PERMISSION_MODE = 'bypassPermissions';
+// Per tab settings (⚙ in the chat pane), saved in projects.json. Aliases
+// follow the latest model of each family.
+const MODELS = ['opus', 'opus[1m]', 'sonnet', 'haiku', 'fable'];
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const DEFAULT_MODEL = 'opus';
+const DEFAULT_EFFORT = 'high';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
   console.error(`Refusing to listen on ${HOST} without BOARD_TOKEN. Set it in .env.`);
@@ -51,6 +57,8 @@ const projectDefaults = () => ({
   // can answer a prompt on a card. Safety comes from isolating the machine,
   // plus deny rules and hooks, which still apply. Override per project.
   permissionMode: DEFAULT_PERMISSION_MODE,
+  model: DEFAULT_MODEL,
+  effort: DEFAULT_EFFORT,
   sandbox: false,
   allowedTools: [],
 });
@@ -74,6 +82,8 @@ function buildConfig(raw) {
     cwd: path.resolve(home(raw.lead?.cwd || path.dirname(ROOT))),
     addDirs: (raw.lead?.addDirs || []).map(home),
     permissionMode: raw.lead?.permissionMode || DEFAULT_PERMISSION_MODE,
+    model: raw.lead?.model || DEFAULT_MODEL,
+    effort: raw.lead?.effort || DEFAULT_EFFORT,
   };
   const ignore = new Set(raw.ignore || ['knowledge']);
   const overrides = (raw.projects || []).map((p) => ({ ...p, path: p.path && path.resolve(home(p.path)) }));
@@ -251,6 +261,9 @@ function publicState() {
       const c = getChat(key);
       return [key, { logId: c.id, busy: !!c.run, sessionId: c.sessionId, lastRun: c.lastRun }];
     })),
+    settings: Object.fromEntries([['main', config.lead], ...config.projects.map((p) => [p.id, p])]
+      .map(([key, { model, effort }]) => [key, { model, effort }])),
+    options: { models: MODELS, efforts: EFFORTS, defaults: { model: DEFAULT_MODEL, effort: DEFAULT_EFFORT } },
   };
 }
 
@@ -438,14 +451,15 @@ function pump() {
   }
 }
 
-function baseArgs(permissionMode) {
+function baseArgs({ permissionMode, model, effort }) {
   return ['-p', '--output-format', 'stream-json', '--verbose',
-    '--permission-prompts', 'none', '--permission-mode', permissionMode];
+    '--permission-prompts', 'none', '--permission-mode', permissionMode,
+    '--model', model, '--effort', effort];
 }
 
 // A project session: runs in the project folder with that project's rules.
 function projectRun(entity, project, systemPrompt, prompt) {
-  const args = [...baseArgs(project.permissionMode), '--append-system-prompt', systemPrompt];
+  const args = [...baseArgs(project), '--append-system-prompt', systemPrompt];
   if (project.sandbox) {
     args.push('--settings', JSON.stringify({ sandbox: { enabled: true, autoAllowBashIfSandboxed: true } }));
   }
@@ -482,7 +496,7 @@ function runChat(key, text) {
   const cli = path.relative(cwd, CLI);
   const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli);
   const tools = [`Bash(node ${CLI}:*)`, `Bash(node ${cli}:*)`, 'Read', 'Glob', 'Grep', 'Edit', 'Write'];
-  const args = [...baseArgs(config.lead.permissionMode), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
+  const args = [...baseArgs(config.lead), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
   for (const dir of config.lead.addDirs) args.push('--add-dir', dir);
   if (chat.sessionId) args.push('--resume', chat.sessionId);
   const env = { ...process.env, BOARD_URL: `http://127.0.0.1:${PORT}`, BOARD_TOKEN: TOKEN };
@@ -820,6 +834,31 @@ async function handle(req, res) {
     saveConfigFile({ ...readConfigFile(), order: [...given, ...ids.filter((id) => !given.includes(id))] });
     rescan();
     return send(res, 200, { projects: publicState().projects });
+  }
+
+  // Tab settings (model, effort): saved in projects.json, used from the next
+  // message or card run on. "main" is Main (lead), anything else a project.
+  if ((r = p.match(/^\/api\/settings\/([a-z0-9_-]+)$/i)) && m === 'POST') {
+    const key = r[1];
+    const b = await readBody(req);
+    if (!MODELS.includes(b.model)) throw httpError(400, `model must be one of ${MODELS.join(', ')}`);
+    if (!EFFORTS.includes(b.effort)) throw httpError(400, `effort must be one of ${EFFORTS.join(', ')}`);
+    const patch = { model: b.model, effort: b.effort };
+    const raw = readConfigFile();
+    if (key === 'main') {
+      raw.lead = { ...raw.lead, ...patch };
+    } else {
+      const project = projectById(key);
+      if (!project) throw httpError(404, 'Unknown project');
+      raw.projects ||= [];
+      const o = raw.projects.find((x) => x.id === key);
+      if (o) Object.assign(o, patch);
+      // A discovered project gets an override that keeps its id, name and folder.
+      else raw.projects.push({ id: key, name: project.name || key, path: tilde(project.path), ...patch });
+    }
+    saveConfigFile(raw);
+    rescan();
+    return send(res, 200, { ok: true });
   }
 
   if (p === '/api/projects/refresh' && m === 'POST') {

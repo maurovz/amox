@@ -1,6 +1,8 @@
 {
   "lead": {
-    "cwd": "~/code"
+    "cwd": "~/code",
+    "model": "opus",
+    "effort": "high"
   },
   "ignore": [
     "knowledge"
@@ -11,6 +13,8 @@
       "name": "My App",
       "path": "~/code/my-app",
       "permissionMode": "bypassPermissions",
+      "model": "opus",
+      "effort": "high",
       "sandbox": false,
       "allowedTools": []
     }

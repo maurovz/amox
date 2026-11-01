@@ -371,6 +371,30 @@ $('#chatReset').addEventListener('click', guard(async () => {
   await api('POST', `/api/chats/${tab}/reset`);
 }));
 
+// ---------- tab settings (model, effort) ----------
+
+const settingsDlg = $('#settingsDlg');
+const MODEL_LABELS = { opus: 'Opus', 'opus[1m]': 'Opus, 1M context', sonnet: 'Sonnet', haiku: 'Haiku', fable: 'Fable' };
+$('#chatSettings').addEventListener('click', () => {
+  const { models, efforts, defaults } = state.options;
+  const cur = state.settings[tab];
+  const opt = (v, label, def) => `<option value="${esc(v)}">${esc(label)}${v === def ? ' (default)' : ''}</option>`;
+  const f = $('#settingsForm');
+  f.model.innerHTML = models.map((m) => opt(m, MODEL_LABELS[m] || m, defaults.model)).join('');
+  f.effort.innerHTML = efforts.map((e) => opt(e, e[0].toUpperCase() + e.slice(1), defaults.effort)).join('');
+  f.model.value = cur.model;
+  f.effort.value = cur.effort;
+  $('#settingsTitle').textContent = `${tab === 'main' ? 'Main' : projectName(tab)} settings`;
+  settingsDlg.showModal();
+});
+$('#settingsForm').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  await api('POST', `/api/settings/${tab}`, { model: f.model.value, effort: f.effort.value });
+  settingsDlg.close();
+  toast('Saved. Applies from the next message.');
+}));
+
 // ---------- chat pane: collapse + drag to resize (desktop) ----------
 
 function setChatCollapsed(collapsed) {
