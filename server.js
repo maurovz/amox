@@ -36,31 +36,33 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 
 // ---------- config ----------
 
-function loadConfig() {
-  const file = path.resolve(ROOT, process.env.PROJECTS_FILE || 'projects.json');
-  if (!fs.existsSync(file)) {
-    console.error('Missing projects.json. Copy projects.example.json and edit it.');
-    process.exit(1);
+// Projects are discovered: every folder in the root (Main's folder) is a
+// project, and folders in root/archive are archived projects. projects.json
+// only overrides: names, permissions, ids kept stable for existing cards,
+// extra projects outside the root, folders to ignore. It's re-read on every
+// rescan, so edits apply without a restart.
+
+const PROJECTS_FILE = path.resolve(ROOT, process.env.PROJECTS_FILE || 'projects.json');
+const ARCHIVE_DIR = 'archive';
+const home = (p) => p.replace(/^~(?=\/|$)/, process.env.HOME);
+const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
+const projectDefaults = () => ({
+  // Default: skip permissions (like --dangerously-skip-permissions). Nobody
+  // can answer a prompt on a card. Safety comes from isolating the machine,
+  // plus deny rules and hooks, which still apply. Override per project.
+  permissionMode: DEFAULT_PERMISSION_MODE,
+  sandbox: false,
+  allowedTools: [],
+});
+
+function readConfigFile() {
+  try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8')); } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    throw new Error(`projects.json: ${err.message}`);
   }
-  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const home = (p) => p.replace(/^~(?=\/|$)/, process.env.HOME);
-  const projects = (raw.projects || []).map((p) => ({
-    // Default: skip permissions (like --dangerously-skip-permissions). Nobody
-    // can answer a prompt on a card. Safety comes from isolating the machine,
-    // plus deny rules and hooks, which still apply. Override per project.
-    permissionMode: DEFAULT_PERMISSION_MODE,
-    sandbox: false,
-    allowedTools: [],
-    ...p,
-    path: home(p.path),
-  }));
-  for (const p of projects) {
-    if (!/^[a-z0-9_-]+$/i.test(p.id) || p.id === 'main') {
-      console.error(`Bad project id "${p.id}": use letters, digits, - or _ (and not "main").`);
-      process.exit(1);
-    }
-    if (!fs.existsSync(p.path)) console.warn(`[board] project "${p.id}": path not found: ${p.path}`);
-  }
+}
+
+function buildConfig(raw) {
   // Main runs in the root folder that holds all projects (by default the
   // parent of this repo), so it sees every project, including the board.
   const lead = {
@@ -68,19 +70,59 @@ function loadConfig() {
     addDirs: (raw.lead?.addDirs || []).map(home),
     permissionMode: raw.lead?.permissionMode || DEFAULT_PERMISSION_MODE,
   };
-  return { projects, lead };
+  const ignore = new Set(raw.ignore || ['knowledge']);
+  const overrides = (raw.projects || []).map((p) => ({ ...p, path: p.path && path.resolve(home(p.path)) }));
+  for (const o of overrides) {
+    if (!/^[a-z0-9_-]+$/i.test(o.id || '') || o.id === 'main') {
+      throw new Error(`Bad project id "${o.id}": use letters, digits, - or _ (and not "main").`);
+    }
+  }
+
+  const found = [];
+  for (const [dir, archived] of [[lead.cwd, false], [path.join(lead.cwd, ARCHIVE_DIR), true]]) {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch {}
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith('.') || ignore.has(e.name)) continue;
+      if (!archived && e.name === ARCHIVE_DIR) continue;
+      found.push(path.join(dir, e.name));
+    }
+  }
+
+  // Overrides match a discovered folder by folder name (wherever it is now,
+  // root or archive), so archiving doesn't change the project's id.
+  const projects = [];
+  const taken = new Set();
+  for (const o of overrides) {
+    const match = found.find((f) => !taken.has(f) && path.basename(f) === path.basename(o.path || o.id));
+    const dir = match || o.path;
+    if (!dir || !fs.existsSync(dir) || projects.some((p) => p.id === o.id)) continue;
+    projects.push({ ...projectDefaults(), ...o, path: dir });
+    taken.add(dir);
+  }
+  for (const dir of found.sort((a, b) => path.basename(a).localeCompare(path.basename(b)))) {
+    if (taken.has(dir)) continue;
+    let id = slug(path.basename(dir));
+    if (id === 'main') id = 'main-project';
+    while (projects.some((p) => p.id === id)) id += '-2';
+    projects.push({ ...projectDefaults(), id, name: path.basename(dir), path: dir });
+  }
+  return { lead, projects };
 }
 
-const config = loadConfig();
+let config;
+try { config = buildConfig(readConfigFile()); } catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
 const projectById = (id) => config.projects.find((p) => p.id === id);
 
 // ---------- archive ----------
 // Archiving moves the project folder into an `archive` folder next to it
 // (~/code/my-app -> ~/code/archive/my-app), moves
 // Claude Code's memory/sessions folders for that path along with it, and
-// saves the new path in projects.json. Unarchive moves it all back.
+// the project keeps its id (matched by folder name). Unarchive moves it all back.
 
-const ARCHIVE_DIR = 'archive';
 const CLAUDE_PROJECTS = path.join(process.env.HOME, '.claude', 'projects');
 const isArchivedPath = (dir) => path.basename(path.dirname(dir)) === ARCHIVE_DIR;
 const encodeDir = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
@@ -106,16 +148,6 @@ function moveClaudeDirs(from, to) {
   }
 }
 
-function saveProjectPath(id, dir) {
-  const file = path.resolve(ROOT, process.env.PROJECTS_FILE || 'projects.json');
-  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const entry = raw.projects.find((p) => p.id === id);
-  entry.path = tilde(dir);
-  fs.writeFileSync(file + '.tmp', JSON.stringify(raw, null, 2) + '\n');
-  fs.renameSync(file + '.tmp', file);
-  projectById(id).path = dir;
-}
-
 function moveProject(id, archive) {
   const proj = projectById(id);
   const from = proj.path;
@@ -129,7 +161,7 @@ function moveProject(id, archive) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.renameSync(from, to);
   moveClaudeDirs(from, to);
-  saveProjectPath(id, to);
+  rescan();
   console.log(`[board] ${archive ? 'archived' : 'unarchived'} ${id}: ${tilde(from)} -> ${tilde(to)}`);
 }
 
@@ -227,6 +259,21 @@ function changed() {
 }
 
 setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 25000).unref();
+
+// New, renamed, archived or removed folders, and edits to projects.json,
+// show up without a restart.
+function rescan() {
+  let next;
+  try { next = buildConfig(readConfigFile()); } catch (err) {
+    console.warn(`[board] ${err.message}`);
+    return;
+  }
+  if (JSON.stringify(next) === JSON.stringify(config)) return;
+  config = next;
+  for (const p of config.projects) db.chats[p.id] ||= { id: `chat-${p.id}`, sessionId: null, run: null, lastRun: null };
+  changed();
+}
+setInterval(rescan, 5000).unref();
 
 // ---------- agent runs ----------
 

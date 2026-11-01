@@ -2,11 +2,14 @@
   "lead": {
     "cwd": "~/code"
   },
+  "ignore": [
+    "knowledge"
+  ],
   "projects": [
     {
-      "id": "example",
-      "name": "Example",
-      "path": "~/code/example",
+      "id": "my-app",
+      "name": "My App",
+      "path": "~/code/my-app",
       "permissionMode": "bypassPermissions",
       "sandbox": false,
       "allowedTools": []

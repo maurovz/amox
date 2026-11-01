@@ -8,6 +8,7 @@ As of 2026-11-01.
 - Chat pane: Main tab plus one tab per project, always visible on desktop (resizable, collapsible), Chat/Board toggle on phones. The active tab filters the board.
 - Main runs in `~/code` and manages cards through `cli.js`.
 - Agents (cards, project chats, Main) skip permissions by default. Deny rules and hooks still apply. Per project, `acceptEdits` plus `sandbox` locks one down.
+- Projects are discovered from the root folder (new folders appear within seconds); `projects.json` only overrides.
 - Archive / unarchive a project (moves its folder and its Claude Code memory).
 - Token auth (cookie after `?token=` once), so it can be exposed.
 

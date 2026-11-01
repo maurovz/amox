@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-01. Projects are discovered from the root folder
+
+A fixed list in `projects.json` missed new folders. Now every folder in Main's root is a project and `archive/` holds archived ones, rescanned every few seconds. `projects.json` is only overrides, matched by folder name, so ids stay stable across archive moves and existing cards keep their project.
+
 ## 2026-11-01. Agents skip permissions until the board is isolated
 
 Agents run with `bypassPermissions` (like `--dangerously-skip-permissions`) by default: denying every prompt made them useless, and the user wants Claude Code's normal freedom. Deny rules and hooks still apply (the board protects its own `data/`, `projects.json`, `.env` this way). Real safety will come from isolating where the board runs, not from prompts. Supersedes the "sandbox plus no prompts" default below, which stays available per project.

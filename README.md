@@ -25,7 +25,9 @@ Open http://127.0.0.1:4700.
 
 **Archive.** A project that is not active now can be archived from its tab (**Archive** button, asks first). Its folder moves into an `archive` folder next to it (`~/code/my-app` → `~/code/archive/my-app`), together with Claude Code's memory and sessions for that path (`~/.claude/projects/`), and `projects.json` gets the new path. In the board it goes into the **Archive** folder at the end of the tabs, and its cards leave Main. **Unarchive** moves everything back. Close the project in editors and terminals before archiving.
 
-`projects.json` (not committed, copy `projects.example.json`). Per project:
+**Discovered, not listed.** Every folder in the root (`lead.cwd`, default `~/code`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up within a few seconds, no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
+
+`projects.json` (optional, not committed, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
 
 - `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
 - `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
