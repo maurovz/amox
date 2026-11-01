@@ -167,7 +167,8 @@ function renderTabs() {
   const archived = state.projects.filter((p) => p.archived).map((p) => p.id);
   // The archive folder stays open while one of its projects is the open tab.
   const open = archiveOpen || archived.includes(tab);
-  let html = active.map((k) => tabBtn(k)).join('');
+  // Divider after Main: Main is fixed, the project tabs after it can be dragged.
+  let html = active.map((k) => tabBtn(k) + (k === 'main' ? '<span class="sep"></span>' : '')).join('');
   if (archived.length) {
     html += '<span class="sep"></span>'
       + `<button class="tab folder" data-folder title="${open ? 'Close' : 'Open'} the archive">${open ? '▾' : '▸'} Archive <span class="n">${archived.length}</span></button>`;
