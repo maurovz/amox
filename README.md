@@ -25,7 +25,7 @@ Open http://127.0.0.1:4700.
 
 **Archive.** A project that is not active now can be archived from its tab (**Archive** button, asks first). Its folder moves into an `archive` folder next to it (`~/code/my-app` → `~/code/archive/my-app`), together with Claude Code's memory and sessions for that path (`~/.claude/projects/`), and `projects.json` gets the new path. In the board it goes into the **Archive** folder at the end of the tabs, and its cards leave Main. **Unarchive** moves everything back. Close the project in editors and terminals before archiving.
 
-**Discovered, not listed.** Every folder in the root (`lead.cwd`, default `~/code`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up within a few seconds, no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
+**Discovered, not listed.** Every folder in the root (`lead.cwd`, default `~/code`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up when you tap **↻** (top bar), no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
 
 `projects.json` (optional, not committed, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
 

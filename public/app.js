@@ -376,6 +376,13 @@ composer($('#cardReply'), (text) => api('POST', `/api/cards/${openCardId}/reply`
 // ---------- new card ----------
 
 const newDlg = $('#newDlg');
+$('#refreshBtn').addEventListener('click', guard(async () => {
+  const before = state.projects.length;
+  const { projects } = await api('POST', '/api/projects/refresh');
+  const added = projects.length - before;
+  toast(added > 0 ? `${added} new project${added > 1 ? 's' : ''}` : 'Projects up to date');
+}));
+
 $('#newBtn').addEventListener('click', () => {
   const f = $('#newForm');
   f.reset();

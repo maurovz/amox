@@ -4,7 +4,7 @@ Newest first.
 
 ## 2026-11-01. Projects are discovered from the root folder
 
-A fixed list in `projects.json` missed new folders. Now every folder in Main's root is a project and `archive/` holds archived ones, rescanned every few seconds. `projects.json` is only overrides, matched by folder name, so ids stay stable across archive moves and existing cards keep their project.
+A fixed list in `projects.json` missed new folders. Now every folder in Main's root is a project and `archive/` holds archived ones, rescanned when the user taps ↻ (or Main runs `cli.js refresh`), not on a timer. `projects.json` is only overrides, matched by folder name, so ids stay stable across archive moves and existing cards keep their project.
 
 ## 2026-11-01. Agents skip permissions until the board is isolated
 

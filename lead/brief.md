@@ -17,6 +17,7 @@ Run from this folder:
 
 ```
 node {{CLI}} projects
+node {{CLI}} refresh      # after creating a project folder, so it shows up
 node {{CLI}} list [--project p] [--status s]
 node {{CLI}} show <id> [--log n]
 node {{CLI}} add --project p --title "..." [--details "..."] [--status backlog|ready]

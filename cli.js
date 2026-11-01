@@ -11,6 +11,7 @@ const TOKEN = process.env.BOARD_TOKEN || '';
 
 const USAGE = `Usage: node cli.js <command>
   projects                                   List project ids
+  refresh                                    Pick up new or renamed project folders
   list [--project p] [--status s]            List cards (hides done unless --status done)
   show <id> [--log n]                        Card details and last n transcript lines (default 30)
   add --project p --title t [--details d] [--status backlog|ready]
@@ -54,6 +55,11 @@ async function main() {
     case 'projects': {
       const s = await api('GET', '/api/state');
       for (const p of s.projects) console.log(`${p.id}\t${p.name}${p.archived ? '\t(archived)' : ''}`);
+      break;
+    }
+    case 'refresh': {
+      const { projects } = await api('POST', '/api/projects/refresh');
+      for (const p of projects) console.log(`${p.id}\t${p.name}${p.archived ? '\t(archived)' : ''}`);
       break;
     }
     case 'list': {

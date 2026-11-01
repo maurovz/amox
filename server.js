@@ -260,8 +260,9 @@ function changed() {
 
 setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 25000).unref();
 
-// New, renamed, archived or removed folders, and edits to projects.json,
-// show up without a restart.
+// Picks up new, renamed, archived or removed folders and edits to
+// projects.json without a restart. Runs on the Refresh button (or
+// `cli.js refresh`) and after archiving; there's no timer on purpose.
 function rescan() {
   let next;
   try { next = buildConfig(readConfigFile()); } catch (err) {
@@ -273,7 +274,6 @@ function rescan() {
   for (const p of config.projects) db.chats[p.id] ||= { id: `chat-${p.id}`, sessionId: null, run: null, lastRun: null };
   changed();
 }
-setInterval(rescan, 5000).unref();
 
 // ---------- agent runs ----------
 
@@ -652,6 +652,11 @@ async function handle(req, res) {
 
   // Archive / unarchive a project: moves its folder into (or out of) the
   // archive folder next to it. See moveProject.
+  if (p === '/api/projects/refresh' && m === 'POST') {
+    rescan();
+    return send(res, 200, { projects: publicState().projects });
+  }
+
   if ((r = p.match(/^\/api\/projects\/([a-z0-9_-]+)\/(archive|unarchive)$/i)) && m === 'POST') {
     const id = r[1];
     if (!projectById(id)) throw httpError(404, 'Unknown project');
