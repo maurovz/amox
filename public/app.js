@@ -367,7 +367,11 @@ $('#chatArchive').addEventListener('click', guard(async () => {
     selectTab('main');
   }
 }));
-$('#chatReset').addEventListener('click', guard(() => api('POST', `/api/chats/${tab}/reset`)));
+$('#chatReset').addEventListener('click', guard(async () => {
+  const name = tab === 'main' ? 'Main' : projectName(tab);
+  if (!confirm(`Clear the ${name} chat?\n\nIt starts a new session and forgets this conversation. Other tabs and cards are not affected.`)) return;
+  await api('POST', `/api/chats/${tab}/reset`);
+}));
 
 // ---------- chat pane: collapse + drag to resize (desktop) ----------
 
