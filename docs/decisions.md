@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-01. Agents skip permissions until the board is isolated
+
+Agents run with `bypassPermissions` (like `--dangerously-skip-permissions`) by default: denying every prompt made them useless, and the user wants Claude Code's normal freedom. Deny rules and hooks still apply (the board protects its own `data/`, `projects.json`, `.env` this way). Real safety will come from isolating where the board runs, not from prompts. Supersedes the "sandbox plus no prompts" default below, which stays available per project.
+
 ## 2026-11-01. Main runs in the root projects folder
 
 Main's working folder is `~/code` (configurable as `lead.cwd`), so it sits above every project, the board included, and can read all of them without extra flags. Its instructions are `lead/brief.md`, passed as a system prompt, not a `CLAUDE.md`: Claude Code loads every `CLAUDE.md` from the working folder upward, so a brief inside this repo would leak into sessions that work on the board, and a `CLAUDE.md` at the root would leak into every project.

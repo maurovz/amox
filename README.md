@@ -27,11 +27,13 @@ Open http://127.0.0.1:4700.
 
 `projects.json` (not committed, copy `projects.example.json`). Per project:
 
-- `permissionMode`: default `acceptEdits`.
-- `sandbox`: default `true`. Bash runs in the OS sandbox and can only write inside the project folder. Network is limited to the sandbox's allowed domains.
+- `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
+- `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
 - `allowedTools`: extra rules, e.g. `["Bash(npm install:*)"]`.
 
-Anything that would need a permission prompt is denied, and the card shows it as "Not allowed: …". Add a rule for it if you want it.
+Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows as "Not allowed: …".
+
+Skipping permissions means agents can do anything your user can on this machine. Run the board somewhere isolated before giving it anything you can't lose.
 
 ## Phone access
 

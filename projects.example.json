@@ -7,8 +7,8 @@
       "id": "example",
       "name": "Example",
       "path": "~/code/example",
-      "permissionMode": "acceptEdits",
-      "sandbox": true,
+      "permissionMode": "bypassPermissions",
+      "sandbox": false,
       "allowedTools": []
     }
   ]

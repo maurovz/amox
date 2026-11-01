@@ -23,6 +23,7 @@ const LEAD_BRIEF = path.join(ROOT, 'lead', 'brief.md');
 const CLI = path.join(ROOT, 'cli.js');
 const STATUSES = ['backlog', 'ready', 'in_progress', 'review', 'done'];
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1'];
+const DEFAULT_PERMISSION_MODE = 'bypassPermissions';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
   console.error(`Refusing to listen on ${HOST} without BOARD_TOKEN. Set it in .env.`);
@@ -44,8 +45,11 @@ function loadConfig() {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   const home = (p) => p.replace(/^~(?=\/|$)/, process.env.HOME);
   const projects = (raw.projects || []).map((p) => ({
-    permissionMode: 'acceptEdits',
-    sandbox: true,
+    // Default: skip permissions (like --dangerously-skip-permissions). Nobody
+    // can answer a prompt on a card. Safety comes from isolating the machine,
+    // plus deny rules and hooks, which still apply. Override per project.
+    permissionMode: DEFAULT_PERMISSION_MODE,
+    sandbox: false,
     allowedTools: [],
     ...p,
     path: home(p.path),
@@ -62,6 +66,7 @@ function loadConfig() {
   const lead = {
     cwd: path.resolve(home(raw.lead?.cwd || path.dirname(ROOT))),
     addDirs: (raw.lead?.addDirs || []).map(home),
+    permissionMode: raw.lead?.permissionMode || DEFAULT_PERMISSION_MODE,
   };
   return { projects, lead };
 }
@@ -302,7 +307,7 @@ function runChat(key, text) {
   const cli = path.relative(cwd, CLI);
   const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli);
   const tools = [`Bash(node ${CLI}:*)`, `Bash(node ${cli}:*)`, 'Read', 'Glob', 'Grep', 'Edit', 'Write'];
-  const args = [...baseArgs('acceptEdits'), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
+  const args = [...baseArgs(config.lead.permissionMode), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
   for (const dir of config.lead.addDirs) args.push('--add-dir', dir);
   if (chat.sessionId) args.push('--resume', chat.sessionId);
   const env = { ...process.env, BOARD_URL: `http://127.0.0.1:${PORT}`, BOARD_TOKEN: TOKEN };
