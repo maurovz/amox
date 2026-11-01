@@ -18,7 +18,7 @@ Only locally, against a throwaway project: task run, resume, sandbox blocking wr
 ## Open
 
 - Not hosted. Phone access planned through Tailscale first (see README).
-- No git remote yet.
+- Repo: github.com/maurovz/board (private).
 - Project KBs that live outside their repo (`knowledge/projects/<slug>/`, for client and open source repos) aren't passed to agents yet.
 - A project chat and a running card in the same folder don't wait for each other.
 - No tests.
