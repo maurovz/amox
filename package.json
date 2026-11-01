@@ -1,0 +1,12 @@
+{
+  "name": "board",
+  "private": true,
+  "type": "module",
+  "description": "Kanban board that runs Claude Code task agents per project, plus a lead agent you chat with.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

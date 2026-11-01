@@ -1,0 +1,23 @@
+# Decisions
+
+Newest first.
+
+## 2026-11-01. Main runs in the root projects folder
+
+Main's working folder is `~/code` (configurable as `lead.cwd`), so it sits above every project, the board included, and can read all of them without extra flags. Its instructions are `lead/brief.md`, passed as a system prompt, not a `CLAUDE.md`: Claude Code loads every `CLAUDE.md` from the working folder upward, so a brief inside this repo would leak into sessions that work on the board, and a `CLAUDE.md` at the root would leak into every project.
+
+## 2026-11-01. The board is one of the projects
+
+It has its own tab and cards, and is changed through them like any other project. Its agents must not touch the live state (`data/`, `projects.json`, `.env`) or restart the server.
+
+## 2026-11-01. Build instead of adopting Vibe Kanban
+
+Vibe Kanban and similar tools cover more than needed (diff review, PRs, previews). The core here is small: a board, `claude -p` per card in the project folder, a lead agent. Zero dependencies so it's easy to host and change.
+
+## 2026-11-01. One session per folder, not subagents
+
+Task agents are separate `claude` processes started in the project folder, so they load only that project's `CLAUDE.md` and memory, exactly like opening a terminal there. Subagents would share Main's context and folder.
+
+## 2026-11-01. Headless agents: sandbox plus no prompts
+
+Nobody can answer a permission prompt on a card, so prompts are denied (`--permission-prompts none`). Bash runs in the OS sandbox, auto-allowed, writing only inside the project folder. Extra permissions are per project in `projects.json`.

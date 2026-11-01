@@ -1,0 +1,15 @@
+{
+  "lead": {
+    "cwd": "~/code"
+  },
+  "projects": [
+    {
+      "id": "example",
+      "name": "Example",
+      "path": "~/code/example",
+      "permissionMode": "acceptEdits",
+      "sandbox": true,
+      "allowedTools": []
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>Board</title>
+  <meta name="theme-color" content="#16161a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body data-view="chat">
+  <header class="top">
+    <h1>Board</h1>
+    <span id="conn" class="conn" title="Live updates"></span>
+    <span class="grow"></span>
+    <div class="viewtoggle" role="tablist" aria-label="View">
+      <button data-view="chat">Chat</button>
+      <button data-view="board">Board</button>
+    </div>
+    <button id="newBtn" class="btn primary" aria-label="New card">+ New</button>
+  </header>
+
+  <div class="layout">
+    <main id="board" class="board"></main>
+
+    <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize chat" tabindex="0" title="Drag to resize, double click to reset"></div>
+
+    <aside class="chat">
+      <nav id="tabs" class="tabs" aria-label="Chats"></nav>
+      <div class="chat-head">
+        <span id="chatHint" class="muted small"></span>
+        <span class="grow"></span>
+        <button id="chatArchive" class="btn ghost" hidden></button>
+        <button id="chatStop" class="btn danger" hidden>Stop</button>
+        <button id="chatReset" class="btn" title="Clear this chat and start a new conversation">Clear</button>
+        <button id="chatCollapse" class="icon" aria-label="Collapse chat" title="Collapse chat">⇥</button>
+      </div>
+      <div id="chatLog" class="log"></div>
+      <form id="chatForm" class="composer">
+        <textarea rows="1"></textarea>
+        <button class="btn primary">Send</button>
+      </form>
+    </aside>
+
+    <button id="chatExpand" class="rail" aria-label="Open chat" title="Open chat"><span class="dot"></span><span>Chat</span></button>
+  </div>
+
+  <!-- Card detail -->
+  <dialog id="cardDlg" class="sheet">
+    <div class="sheet-head">
+      <button class="icon" data-close aria-label="Close">✕</button>
+      <select id="cardProject" aria-label="Project"></select>
+      <span class="grow"></span>
+      <button id="cardDelete" class="btn ghost danger">Delete</button>
+    </div>
+    <input id="cardTitle" class="title-input" placeholder="Title">
+    <div id="cardStatus" class="pills"></div>
+    <textarea id="cardDetails" class="details" rows="5" placeholder="Details: goal, where, what done looks like, what not to touch."></textarea>
+    <div class="row">
+      <span id="cardSaved" class="muted small"></span>
+      <span class="grow"></span>
+      <button id="cardStop" class="btn danger" hidden>Stop</button>
+      <button id="cardStart" class="btn primary" hidden>Start ▶</button>
+    </div>
+    <div id="cardLog" class="log"></div>
+    <form id="cardReply" class="composer" hidden>
+      <textarea rows="1" placeholder="Reply to this agent…"></textarea>
+      <button class="btn primary">Send</button>
+    </form>
+  </dialog>
+
+  <!-- New card -->
+  <dialog id="newDlg" class="sheet small-sheet">
+    <form id="newForm" class="stack">
+      <div class="sheet-head">
+        <button type="button" class="icon" data-close aria-label="Close">✕</button>
+        <strong>New card</strong>
+      </div>
+      <select name="project" required></select>
+      <input name="title" placeholder="Title" required>
+      <textarea name="details" rows="5" placeholder="Details (optional)"></textarea>
+      <select name="status">
+        <option value="backlog">Backlog</option>
+        <option value="ready">Ready</option>
+        <option value="in_progress">Start now</option>
+      </select>
+      <button class="btn primary">Create</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

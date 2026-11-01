@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(./data/**)",
+      "Write(./data/**)",
+      "Edit(./projects.json)",
+      "Write(./projects.json)",
+      "Read(./.env)",
+      "Edit(./.env)",
+      "Write(./.env)"
+    ]
+  }
+}

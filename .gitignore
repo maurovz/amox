@@ -1,0 +1,4 @@
+data/
+.env
+projects.json
+node_modules/
