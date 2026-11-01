@@ -153,13 +153,15 @@ function setWorking(el, text) {
 // ---------- chat pane ----------
 
 function renderTabs() {
+  if (tabDrag?.active) return; // don't rebuild the strip mid-drag
   const keys = ['main', ...state.projects.map((p) => p.id)];
   if (!keys.includes(tab)) tab = 'main';
   const anyBusy = keys.some((k) => state.chats[k]?.busy);
   $('#chatExpand .dot').className = `dot ${anyBusy ? 'busy' : unread.size ? 'unread' : ''}`;
   const tabBtn = (k, extra = '') => {
     const dot = state.chats[k]?.busy ? 'busy' : unread.has(k) ? 'unread' : '';
-    return `<button class="tab${k === tab ? ' on' : ''}${extra}" data-tab="${esc(k)}">${esc(tabName(k))}<span class="dot ${dot}"></span></button>`;
+    const movable = k !== 'main' && !extra ? ' movable' : '';
+    return `<button class="tab${k === tab ? ' on' : ''}${extra}${movable}" data-tab="${esc(k)}">${esc(tabName(k))}<span class="dot ${dot}"></span></button>`;
   };
   const active = ['main', ...state.projects.filter((p) => !p.archived).map((p) => p.id)];
   const archived = state.projects.filter((p) => p.archived).map((p) => p.id);
@@ -209,7 +211,83 @@ async function selectTab(key) {
   renderChatControls();
 }
 
+// ---------- drag to reorder project tabs ----------
+// Mouse: press and move. Touch: hold ~0.35s, then move (a quick swipe still
+// scrolls the strip). Main and archived tabs don't move. The order is saved
+// in projects.json on the server.
+
+let tabDrag = null;
+let suppressTabClick = false;
+
+$('#tabs').addEventListener('pointerdown', (e) => {
+  const el = e.target.closest('.tab.movable');
+  if (!el || e.button > 0) return;
+  tabDrag = { el, id: e.pointerId, x: e.clientX, y: e.clientY, active: false, touch: e.pointerType !== 'mouse' };
+  if (tabDrag.touch) tabDrag.timer = setTimeout(() => startTabDrag(), 350);
+});
+
+function startTabDrag() {
+  if (!tabDrag) return;
+  tabDrag.active = true;
+  tabDrag.el.classList.add('dragging');
+  document.body.classList.add('tab-dragging');
+  try { tabDrag.el.setPointerCapture(tabDrag.id); } catch {}
+  navigator.vibrate?.(10);
+}
+
+window.addEventListener('pointermove', (e) => {
+  if (!tabDrag || e.pointerId !== tabDrag.id) return;
+  const moved = Math.hypot(e.clientX - tabDrag.x, e.clientY - tabDrag.y);
+  if (!tabDrag.active) {
+    if (tabDrag.touch) { if (moved > 8) cancelTabDrag(); return; } // it's a scroll
+    if (moved < 6) return;
+    startTabDrag();
+  }
+  const strip = $('#tabs');
+  const others = [...strip.querySelectorAll('.tab.movable')].filter((t) => t !== tabDrag.el);
+  const before = others.find((t) => { const r = t.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; });
+  const lastMovable = others[others.length - 1];
+  if (before) { if (tabDrag.el.nextElementSibling !== before) strip.insertBefore(tabDrag.el, before); }
+  else if (lastMovable && lastMovable.nextElementSibling !== tabDrag.el) lastMovable.after(tabDrag.el);
+  const r = strip.getBoundingClientRect(); // auto-scroll near the edges
+  if (e.clientX < r.left + 30) strip.scrollLeft -= 12;
+  else if (e.clientX > r.right - 30) strip.scrollLeft += 12;
+});
+
+// While dragging on touch, stop the strip (and page) from scrolling.
+$('#tabs').addEventListener('touchmove', (e) => { if (tabDrag?.active) e.preventDefault(); }, { passive: false });
+$('#tabs').addEventListener('contextmenu', (e) => { if (e.target.closest('.tab.movable')) e.preventDefault(); });
+
+window.addEventListener('pointerup', (e) => { if (tabDrag && e.pointerId === tabDrag.id) endTabDrag(); });
+window.addEventListener('pointercancel', (e) => { if (tabDrag && e.pointerId === tabDrag.id) cancelTabDrag(); });
+
+function cancelTabDrag() {
+  if (!tabDrag) return;
+  clearTimeout(tabDrag.timer);
+  const wasActive = tabDrag.active;
+  tabDrag.el.classList.remove('dragging');
+  document.body.classList.remove('tab-dragging');
+  tabDrag = null;
+  if (wasActive) renderTabs();
+}
+
+const endTabDrag = guard(async () => {
+  const wasActive = tabDrag.active;
+  clearTimeout(tabDrag.timer);
+  tabDrag.el.classList.remove('dragging');
+  document.body.classList.remove('tab-dragging');
+  tabDrag = null;
+  if (!wasActive) return;
+  suppressTabClick = true;
+  setTimeout(() => { suppressTabClick = false; }, 0);
+  const order = [...$('#tabs').querySelectorAll('.tab.movable')].map((t) => t.dataset.tab);
+  const { projects } = await api('POST', '/api/projects/order', { order });
+  state.projects = projects;
+  renderTabs();
+});
+
 $('#tabs').addEventListener('click', (e) => {
+  if (suppressTabClick) { suppressTabClick = false; return; }
   if (e.target.closest('[data-folder]')) {
     const archived = state.projects.filter((p) => p.archived).map((p) => p.id);
     archiveOpen = !(archiveOpen || archived.includes(tab));

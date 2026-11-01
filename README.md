@@ -14,6 +14,7 @@ Open http://127.0.0.1:4700.
 ## How it works
 
 - **Chat pane, always visible.** Tabs: **Main** (the lead, sees every project and the board) and one tab per project (Claude Code running in that folder, like a terminal there). The active tab also filters the board. On a phone, switch between Chat and Board at the top.
+- **Tab order:** drag project tabs to reorder them (on a phone, hold a tab, then drag). Main stays first. Saved as `order` in `projects.json`.
 - **Columns:** Backlog, Ready, In progress, Review, Done.
 - **In progress = go.** Moving a card there runs `claude -p` inside that project's folder, so it loads only that project's `CLAUDE.md` and memory, as if you opened Claude Code there. When it ends, the card moves to Review.
 - **Reply** on a card to continue the same session. **Stop** kills it.

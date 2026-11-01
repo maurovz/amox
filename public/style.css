@@ -152,6 +152,9 @@ body[data-chat="collapsed"] .rail { display: flex; }
   white-space: nowrap;
 }
 .tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.tab.dragging { background: var(--code); border-radius: 8px 8px 0 0; color: var(--text); opacity: 0.9; cursor: grabbing; }
+body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; }
 .tab .dot.busy { background: var(--ok); animation: pulse 1.2s infinite; }
 .tab .dot.unread { background: var(--accent); }

@@ -62,6 +62,11 @@ function readConfigFile() {
   }
 }
 
+function saveConfigFile(raw) {
+  fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(raw, null, 2) + '\n');
+  fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
+}
+
 function buildConfig(raw) {
   // Main runs in the root folder that holds all projects (by default the
   // parent of this repo), so it sees every project, including the board.
@@ -107,6 +112,11 @@ function buildConfig(raw) {
     while (projects.some((p) => p.id === id)) id += '-2';
     projects.push({ ...projectDefaults(), id, name: path.basename(dir), path: dir });
   }
+  // Tab order chosen by dragging tabs (projects.json "order"). Projects not in
+  // it keep their place after the ordered ones.
+  const order = Array.isArray(raw.order) ? raw.order : [];
+  const rank = (p) => (order.includes(p.id) ? order.indexOf(p.id) : Infinity);
+  projects.sort((a, b) => rank(a) - rank(b));
   return { lead, projects };
 }
 
@@ -652,6 +662,16 @@ async function handle(req, res) {
 
   // Archive / unarchive a project: moves its folder into (or out of) the
   // archive folder next to it. See moveProject.
+  if (p === '/api/projects/order' && m === 'POST') {
+    const b = await readBody(req);
+    if (!Array.isArray(b.order)) throw httpError(400, 'order must be a list of project ids');
+    const ids = config.projects.map((x) => x.id);
+    const given = b.order.filter((id, i) => ids.includes(id) && b.order.indexOf(id) === i);
+    saveConfigFile({ ...readConfigFile(), order: [...given, ...ids.filter((id) => !given.includes(id))] });
+    rescan();
+    return send(res, 200, { projects: publicState().projects });
+  }
+
   if (p === '/api/projects/refresh' && m === 'POST') {
     rescan();
     return send(res, 200, { projects: publicState().projects });
