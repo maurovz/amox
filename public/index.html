@@ -66,6 +66,13 @@
       <button id="cardStop" class="btn danger" hidden>Stop</button>
       <button id="cardStart" class="btn primary" hidden>Start ▶</button>
     </div>
+    <div id="cardReview" class="row review" hidden>
+      <span class="muted small">Review:</span>
+      <span class="grow"></span>
+      <button id="cardReject" class="btn danger" title="Revert this card's changes and send it back to Ready">Reject</button>
+      <button id="cardRedo" class="btn" title="Revert this card's changes and run it again from scratch">Redo</button>
+      <button id="cardApprove" class="btn primary" title="Keep the changes and move to Done">Approve</button>
+    </div>
     <div id="cardLog" class="log"></div>
     <form id="cardReply" class="composer" hidden>
       <textarea rows="1" placeholder="Reply to this agent…"></textarea>

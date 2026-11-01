@@ -268,7 +268,13 @@ dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 }
 .ev { overflow-wrap: anywhere; }
 .ev.user { align-self: flex-end; background: var(--user); padding: 8px 11px; border-radius: 12px 12px 4px 12px; max-width: 85%; white-space: pre-wrap; }
-.ev.text { white-space: pre-wrap; }
+.ev.text p { margin: 0 0 8px; }
+.ev.text p:last-child, .ev.text ul:last-child, .ev.text ol:last-child { margin-bottom: 0; }
+.ev.text p.h { font-weight: 650; margin-top: 4px; }
+.ev.text ul, .ev.text ol { margin: 0 0 8px; padding-left: 22px; }
+.ev.text li { margin: 2px 0; }
+.ev.text hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.review { border-top: 1px solid var(--border); padding-top: 8px; }
 .ev.tool { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 .ev.tool::before { content: "› "; }
 .ev.tool_error, .ev.error { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--danger); white-space: pre-wrap; }

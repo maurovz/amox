@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-01. Review is decided by buttons, not by the agent
+
+Asking "summary" on a card made the agent check the repo and report again: every reply resent "end with what changed", and nothing said to be brief. Now replies get a "just answer" prompt, every agent gets a short-answers style (`style` in `projects.json`), and Approve / Reject / Redo are fixed actions. Reject and Redo revert through git snapshots taken before the card's first run, and refuse when the work was pushed.
+
 ## 2026-11-01. Projects are discovered from the root folder
 
 A fixed list in `projects.json` missed new folders. Now every folder in Main's root is a project and `archive/` holds archived ones, rescanned when the user taps ↻ (or Main runs `cli.js refresh`), not on a timer. `projects.json` is only overrides, matched by folder name, so ids stay stable across archive moves and existing cards keep their project.

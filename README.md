@@ -17,7 +17,13 @@ Open http://127.0.0.1:4700.
 - **Tab order:** drag project tabs to reorder them (on a phone, hold a tab, then drag). Main stays first. Saved as `order` in `projects.json`.
 - **Columns:** Backlog, Ready, In progress, Review, Done.
 - **In progress = go.** Moving a card there runs `claude -p` inside that project's folder, so it loads only that project's `CLAUDE.md` and memory, as if you opened Claude Code there. When it ends, the card moves to Review.
-- **Reply** on a card to continue the same session. **Stop** kills it.
+- **Reply** on a card to ask or add something in the same session. A reply is treated as a question: the agent answers it and doesn't redo the task unless you ask. **Stop** kills a run.
+- **Review buttons** (fixed actions, the agent isn't asked anything):
+  - **Approve**: keep the changes, move to Done.
+  - **Reject**: revert the card's changes, back to Ready with a fresh session.
+  - **Redo**: revert, then run the card again from scratch.
+
+  Revert uses git. Before a card first runs, the board records each repo in the project folder (the folder itself, or its direct subfolders for multi-repo folders): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
 - One running card per project at a time, since they share the working tree. Others wait as Queued.
 - **Main** is a Claude session in the root projects folder (`lead.cwd` in `projects.json`, default: the folder that holds this repo). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. Its brief is `lead/brief.md`.
 - **The board is a project too** (`board` tab). Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
@@ -33,6 +39,8 @@ Open http://127.0.0.1:4700.
 - `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
 - `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
 - `allowedTools`: extra rules, e.g. `["Bash(npm install:*)"]`.
+
+Top level `style`: how every agent answers. Default: brief, lead with the answer, no headings or long reports.
 
 Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows as "Not allowed: …".
 

@@ -19,10 +19,49 @@ function store(key, value) {
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Minimal markdown: fenced code, inline code, bold.
+// Small markdown renderer: code blocks, headings, lists, rules, paragraphs,
+// inline code, bold, italic. Enough for agent replies.
+function mdInline(t) {
+  return esc(t)
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1<em>$2</em>');
+}
+
+function mdBlocks(text) {
+  const out = [];
+  let para = [];
+  let list = null;
+  const flushPara = () => { if (para.length) out.push(`<p>${para.map(mdInline).join('<br>')}</p>`); para = []; };
+  const flushList = () => {
+    if (list) out.push(`<${list.tag}>${list.items.map((x) => `<li>${mdInline(x)}</li>`).join('')}</${list.tag}>`);
+    list = null;
+  };
+  for (const line of text.split('\n')) {
+    let m;
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushPara(); flushList(); out.push('<hr>'); continue; }
+    if ((m = line.match(/^\s{0,3}#{1,6}\s+(.*)$/))) { flushPara(); flushList(); out.push(`<p class="h">${mdInline(m[1])}</p>`); continue; }
+    if ((m = line.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)$/))) {
+      const tag = m[1] ? 'ol' : 'ul';
+      flushPara();
+      if (list?.tag !== tag) { flushList(); list = { tag, items: [] }; }
+      list.items.push(m[2]);
+      continue;
+    }
+    if (list && /^\s{2,}\S/.test(line)) { list.items[list.items.length - 1] += ` ${line.trim()}`; continue; }
+    flushList();
+    para.push(line);
+  }
+  flushPara();
+  flushList();
+  return out.join('');
+}
+
 function md(s) {
-  return s.split(/```[^\n]*\n?([\s\S]*?)```/g).map((part, i) => (i % 2
-    ? `<pre><code>${esc(part)}</code></pre>`
-    : esc(part).replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>'))).join('');
+  return s.split(/```[^\n]*\n?([\s\S]*?)```/g)
+    .map((part, i) => (i % 2 ? `<pre><code>${esc(part.replace(/\n$/, ''))}</code></pre>` : mdBlocks(part)))
+    .join('');
 }
 
 async function api(method, url, body) {
@@ -408,6 +447,7 @@ function renderCardSheet(full) {
   $('#cardStart').hidden = running;
   $('#cardStart').textContent = card.sessionId ? 'Resume ▶' : 'Start ▶';
   $('#cardDelete').disabled = running;
+  $('#cardReview').hidden = running || card.status !== 'review';
   const reply = $('#cardReply');
   reply.hidden = !card.sessionId;
   reply.querySelector('button').disabled = running;
@@ -425,6 +465,23 @@ $('#cardStart').addEventListener('click', guard(async () => {
   await api('PATCH', `/api/cards/${openCardId}`, { status: 'in_progress' });
 }));
 $('#cardStop').addEventListener('click', guard(() => api('POST', `/api/cards/${openCardId}/stop`)));
+
+// Review buttons: fixed actions, the agent isn't asked anything.
+$('#cardApprove').addEventListener('click', guard(() => api('POST', `/api/cards/${openCardId}/approve`)));
+for (const [btn, action] of [['#cardReject', 'reject'], ['#cardRedo', 'redo']]) {
+  $(btn).addEventListener('click', guard(async () => {
+    const card = state.cards.find((c) => c.id === openCardId);
+    const name = projectName(card.project);
+    const then = action === 'reject' ? 'send the card back to Ready' : 'run the card again from scratch';
+    const msg = card.canRevert
+      ? `${action === 'reject' ? 'Reject' : 'Redo'}: revert everything changed in ${name} since this card started, then ${then}?\n\n`
+        + 'Your uncommitted work from before the card is kept. Changes made meanwhile from the project chat are reverted too.'
+      : `Nothing to revert for this card (no snapshot). ${then[0].toUpperCase() + then.slice(1)}?`;
+    if (!confirm(msg)) return;
+    const r = await api('POST', `/api/cards/${openCardId}/${action}`);
+    toast(r.note);
+  }));
+}
 $('#cardDelete').addEventListener('click', guard(async () => {
   if (!confirm('Delete this card and its transcript?')) return;
   await api('DELETE', `/api/cards/${openCardId}`);

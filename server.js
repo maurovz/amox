@@ -5,7 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +24,9 @@ const CLI = path.join(ROOT, 'cli.js');
 const STATUSES = ['backlog', 'ready', 'in_progress', 'review', 'done'];
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1'];
 const DEFAULT_PERMISSION_MODE = 'bypassPermissions';
+// How every agent should answer. Override with "style" in projects.json.
+const DEFAULT_STYLE = 'Be brief. Lead with the answer in a few short sentences. '
+  + 'No headings, no long reports, do not restate the question. Use a short list only for steps or options.';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
   console.error(`Refusing to listen on ${HOST} without BOARD_TOKEN. Set it in .env.`);
@@ -117,7 +120,7 @@ function buildConfig(raw) {
   const order = Array.isArray(raw.order) ? raw.order : [];
   const rank = (p) => (order.includes(p.id) ? order.indexOf(p.id) : Infinity);
   projects.sort((a, b) => rank(a) - rank(b));
-  return { lead, projects };
+  return { lead, projects, style: typeof raw.style === 'string' ? raw.style : DEFAULT_STYLE };
 }
 
 let config;
@@ -246,7 +249,7 @@ function publicState() {
   return {
     statuses: STATUSES,
     projects: config.projects.map(({ id, name, path: dir }) => ({ id, name: name || id, archived: isArchivedPath(dir) })),
-    cards: db.cards,
+    cards: db.cards.map(({ baseline, ...c }) => ({ ...c, canRevert: !!baseline?.repos?.length })),
     chats: Object.fromEntries(['main', ...config.projects.map((p) => p.id)].map((key) => {
       const c = getChat(key);
       return [key, { logId: c.id, busy: !!c.run, sessionId: c.sessionId, lastRun: c.lastRun }];
@@ -289,23 +292,147 @@ function rescan() {
 
 const procs = new Map(); // entity id -> child process
 
+// ---------- git snapshots for Reject / Redo ----------
+// Before a card first runs, every git repo in the project folder (the folder
+// itself, or its direct subfolders for multi-repo folders) is
+// recorded: HEAD, branch, the untracked file list, and the whole working copy
+// (uncommitted edits and untracked files) as a commit built in a temporary
+// index, kept alive under refs/board/. The real index and files aren't
+// touched. Revert = reset to that HEAD, delete files the card created, put
+// the working copy back. It refuses, changing nothing, if the agent pushed,
+// switched branch or rewrote history.
+
+const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], {
+  encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
+}).trim();
+
+function gitRepos(dir) {
+  try { return [git(dir, 'rev-parse', '--show-toplevel')]; } catch {}
+  let entries = [];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch {}
+  return entries.filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, '.git'))).map((e) => path.join(dir, e.name));
+}
+
+const untrackedFiles = (dir) => git(dir, 'ls-files', '--others', '--exclude-standard', '-z').split('\0').filter(Boolean);
+
+// Commit of the working copy as it is (tracked edits + untracked files), or
+// null when it matches HEAD.
+function workingCopyCommit(dir) {
+  const index = path.join(DATA_DIR, `snapshot-index-${process.pid}-${Date.now()}`);
+  const env = {
+    ...process.env, GIT_INDEX_FILE: index,
+    GIT_AUTHOR_NAME: 'board', GIT_AUTHOR_EMAIL: 'board@localhost',
+    GIT_COMMITTER_NAME: 'board', GIT_COMMITTER_EMAIL: 'board@localhost',
+  };
+  const run = (...args) => execFileSync('git', ['-C', dir, ...args], {
+    env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
+  }).trim();
+  try {
+    run('read-tree', 'HEAD');
+    run('add', '-A');
+    const tree = run('write-tree');
+    if (tree === run('rev-parse', 'HEAD^{tree}')) return null;
+    return run('commit-tree', tree, '-p', 'HEAD', '-m', 'board: working copy before card');
+  } finally {
+    fs.rmSync(index, { force: true });
+  }
+}
+
+function snapshot(card, projectDir) {
+  const repos = [];
+  for (const dir of gitRepos(projectDir)) {
+    let head;
+    try { head = git(dir, 'rev-parse', 'HEAD'); } catch { continue; } // no commits yet
+    const work = workingCopyCommit(dir);
+    const ref = work ? `refs/board/${card.id}-${Date.now()}` : null;
+    if (ref) git(dir, 'update-ref', ref, work);
+    repos.push({
+      rel: path.relative(projectDir, dir) || '.',
+      head, branch: git(dir, 'rev-parse', '--abbrev-ref', 'HEAD'), work, ref, untracked: untrackedFiles(dir),
+    });
+  }
+  return { takenAt: now(), repos };
+}
+
+const repoName = (r, projectDir) => (r.rel === '.' ? path.basename(projectDir) : r.rel);
+
+function revertProblems(baseline, projectDir) {
+  const problems = [];
+  for (const r of baseline.repos) {
+    const dir = path.resolve(projectDir, r.rel);
+    const name = repoName(r, projectDir);
+    try {
+      if (git(dir, 'rev-parse', '--abbrev-ref', 'HEAD') !== r.branch) { problems.push(`${name} is on another branch now`); continue; }
+      const head = git(dir, 'rev-parse', 'HEAD');
+      if (head === r.head) continue;
+      try { git(dir, 'merge-base', '--is-ancestor', r.head, head); } catch { problems.push(`${name}: history was rewritten`); continue; }
+      const all = git(dir, 'rev-list', '--count', `${r.head}..${head}`);
+      const unpushed = git(dir, 'rev-list', '--count', `${r.head}..${head}`, '--not', '--remotes');
+      if (all !== unpushed) problems.push(`${name}: the card's commits were already pushed`);
+    } catch (err) {
+      problems.push(`${name}: ${err.message.split('\n')[0]}`);
+    }
+  }
+  return problems;
+}
+
+function revert(baseline, projectDir) {
+  const names = [];
+  for (const r of baseline.repos) {
+    const dir = path.resolve(projectDir, r.rel);
+    git(dir, 'reset', '--hard', r.head);
+    const keep = new Set(r.untracked);
+    for (const f of untrackedFiles(dir)) if (!keep.has(f)) fs.rmSync(path.join(dir, f), { force: true, recursive: true });
+    if (r.work) {
+      // Put the working copy back, including untracked files the card may
+      // have committed (and the reset then removed), then unstage it all.
+      git(dir, 'checkout', r.work, '--', '.');
+      const deleted = git(dir, 'diff', '--name-only', '-z', '--diff-filter=D', r.head, r.work).split('\0').filter(Boolean);
+      for (const f of deleted) fs.rmSync(path.join(dir, f), { force: true });
+      git(dir, 'reset', '-q');
+    }
+    names.push(repoName(r, projectDir));
+  }
+  return names;
+}
+
+function dropBaseline(card) {
+  const project = projectById(card.project);
+  for (const r of card.baseline?.repos || []) {
+    if (!r.ref || !project) continue;
+    try { git(path.resolve(project.path, r.rel), 'update-ref', '-d', r.ref); } catch {}
+  }
+  card.baseline = null;
+}
+
 function taskPrompt(card) {
   return [card.title, card.details].filter(Boolean).join('\n\n');
 }
 
-function taskSystemPrompt(card, project) {
-  return [
+// work = the card was started (Start, Resume, Redo). Otherwise the user is
+// replying on the card, usually a question about the work already done.
+function taskSystemPrompt(card, project, work) {
+  const lines = [
     `You are a task agent started from the user's kanban board for card ${card.id} ("${card.title}") in project "${project.name || project.id}".`,
     `Work only inside ${project.path}.`,
-    'If you need a decision from the user, ask it clearly as your final message and stop. They will reply on the card.',
     'Do not push to any remote unless the card asks you to.',
-    'End with a short summary: what changed and how to check it.',
-  ].join(' ');
+  ];
+  if (work) {
+    lines.push(
+      'If you need a decision from the user, ask it clearly as your final message and stop. They will reply on the card.',
+      'When done, end with two or three lines: what changed and how to check it.',
+    );
+  } else {
+    lines.push('The user is replying on the card. Answer exactly what they wrote. Do not redo or continue the task, '
+      + 'and do not inspect the repo, unless the reply asks for that.');
+  }
+  lines.push(config.style);
+  return lines.join(' ');
 }
 
-function enqueue(card, prompt) {
+function enqueue(card, prompt, { work = false } = {}) {
   card.status = 'in_progress';
-  card.run = { state: 'queued', prompt, queuedAt: now() };
+  card.run = { state: 'queued', prompt, work, queuedAt: now() };
   card.updatedAt = now();
   appendLog(card.id, { kind: 'user', text: prompt });
   changed();
@@ -346,7 +473,12 @@ function projectRun(entity, project, systemPrompt, prompt) {
 function runCard(card) {
   const project = projectById(card.project);
   if (!project) return finish(card, { state: 'failed', error: `Unknown project ${card.project}` });
-  projectRun(card, project, taskSystemPrompt(card, project), card.run.prompt);
+  // Remember how the repo(s) looked before the card first touched them, so
+  // Reject / Redo can put them back.
+  if (card.run.work && !card.baseline) {
+    try { card.baseline = snapshot(card, project.path); } catch (err) { console.warn(`[board] snapshot ${card.id}: ${err.message}`); }
+  }
+  projectRun(card, project, taskSystemPrompt(card, project, card.run.work), card.run.prompt);
 }
 
 function runChat(key, text) {
@@ -357,12 +489,12 @@ function runChat(key, text) {
   if (key !== 'main') {
     const project = projectById(key);
     const system = `The user is chatting with you from their board, in project "${project.name || project.id}". `
-      + `Work only inside ${project.path}. Do not push to any remote unless the user asks.`;
+      + `Work only inside ${project.path}. Do not push to any remote unless the user asks. ${config.style}`;
     return projectRun(chat, project, system, text);
   }
   const { cwd } = config.lead;
   const cli = path.relative(cwd, CLI);
-  const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli);
+  const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli) + `\n\n${config.style}`;
   const tools = [`Bash(node ${CLI}:*)`, `Bash(node ${cli}:*)`, 'Read', 'Glob', 'Grep', 'Edit', 'Write'];
   const args = [...baseArgs(config.lead.permissionMode), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
   for (const dir of config.lead.addDirs) args.push('--add-dir', dir);
@@ -599,7 +731,7 @@ async function handle(req, res) {
       createdAt: now(), updatedAt: now(),
     };
     db.cards.push(card);
-    if (status === 'in_progress') enqueue(card, taskPrompt(card));
+    if (status === 'in_progress') enqueue(card, taskPrompt(card), { work: true });
     else changed();
     return send(res, 201, card);
   }
@@ -628,11 +760,12 @@ async function handle(req, res) {
         if (b.status === 'in_progress') {
           const prompt = b.message?.trim()
             || (card.sessionId ? `Continue. Current card:\n\n${taskPrompt(card)}` : taskPrompt(card));
-          enqueue(card, prompt);
+          enqueue(card, prompt, { work: true });
           return send(res, 200, card);
         }
         if (card.run?.state === 'running') throw httpError(409, 'Card is running. Stop it first.');
         if (card.run?.state === 'queued') card.run = null;
+        if (b.status === 'done') dropBaseline(card); // done = accepted
         card.status = b.status;
       }
       changed();
@@ -641,6 +774,7 @@ async function handle(req, res) {
 
     if (!action && m === 'DELETE') {
       if (card.run) throw httpError(409, 'Stop the card first');
+      dropBaseline(card);
       db.cards = db.cards.filter((c) => c !== card);
       for (const f of [logFile(card.id), path.join(LOG_DIR, `${card.id}.raw.jsonl`)]) fs.rmSync(f, { force: true });
       changed();
@@ -658,6 +792,36 @@ async function handle(req, res) {
     }
 
     if (action === '/stop' && m === 'POST') { stop(card); return send(res, 200, { ok: true }); }
+
+    // Fixed actions for a card in review. They don't ask the agent anything.
+    if (action === '/approve' && m === 'POST') {
+      if (card.run) throw httpError(409, 'Stop the card first');
+      dropBaseline(card);
+      card.status = 'done';
+      card.updatedAt = now();
+      appendLog(card.id, { kind: 'system', text: 'Approved' });
+      changed();
+      return send(res, 200, { ok: true });
+    }
+
+    if ((action === '/reject' || action === '/redo') && m === 'POST') {
+      if (card.run) throw httpError(409, 'Stop the card first');
+      if (db.chats[card.project]?.run) throw httpError(409, `The ${card.project} chat is running. Wait for it or stop it first.`);
+      const project = projectById(card.project);
+      let note = 'Nothing to revert: no snapshot for this card.';
+      if (card.baseline?.repos.length && project) {
+        const problems = revertProblems(card.baseline, project.path);
+        if (problems.length) throw httpError(409, `Can't revert, nothing was changed. ${problems.join('. ')}.`);
+        note = `Reverted ${revert(card.baseline, project.path).join(', ')} to before this card.`;
+      }
+      dropBaseline(card);
+      card.sessionId = null;
+      card.lastRun = null;
+      appendLog(card.id, { kind: 'system', text: `${action === '/redo' ? 'Redo' : 'Rejected'}. ${note}` });
+      if (action === '/redo') enqueue(card, taskPrompt(card), { work: true });
+      else { card.status = 'ready'; card.updatedAt = now(); changed(); }
+      return send(res, 200, { ok: true, note });
+    }
   }
 
   // Archive / unarchive a project: moves its folder into (or out of) the

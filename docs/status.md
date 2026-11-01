@@ -9,6 +9,7 @@ As of 2026-11-01.
 - Main runs in `~/code` and manages cards through `cli.js`.
 - Agents (cards, project chats, Main) skip permissions by default. Deny rules and hooks still apply. Per project, `acceptEdits` plus `sandbox` locks one down.
 - Projects are discovered from the root folder (↻ picks up new folders); `projects.json` only overrides.
+- Review: Approve, Reject (git revert, back to Ready), Redo (revert and rerun). Tested on a scratch repo: exact restore, refuses after a push.
 - Archive / unarchive a project (moves its folder and its Claude Code memory).
 - Token auth (cookie after `?token=` once), so it can be exposed.
 
