@@ -4,7 +4,7 @@ Newest first.
 
 ## 2026-11-02. Renamed to Amox
 
-"Board" was too generic. Amox is short for Nahuatl *amoxtli*, the codex where the Mexica kept their records. Only the name changed: the folder, the `board` project id, `data/board.json`, `refs/board/` snapshots, browser storage keys, the login cookie and the `x-board-from` header keep their old names so the live install, saved settings and existing card snapshots keep working. Env vars are now `AMOX_*`, with `BOARD_*` still read as a fallback.
+"Board" was too generic. Amox is short for Nahuatl *amoxtli*, the codex where the Mexica kept their records. The GitHub repo and folder were renamed too. The `board` project id, `data/board.json`, `refs/board/` snapshots, browser storage keys, the login cookie and the `x-board-from` header keep their old names (`projects.json` maps the `amox` folder to id `board`) so the live install, saved settings and existing card snapshots keep working. Env vars are now `AMOX_*`, with `BOARD_*` still read as a fallback.
 
 ## 2026-11-01. Cards report back to Main
 
