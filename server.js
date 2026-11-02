@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Board: a kanban board whose cards run Claude Code task agents, one per
+// Amox: a kanban board whose cards run Claude Code task agents, one per
 // project folder, plus a lead agent you chat with. No dependencies.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ try { process.loadEnvFile(path.join(ROOT, '.env')); } catch {}
 
 const PORT = Number(process.env.PORT) || 4700;
 const HOST = process.env.HOST || '127.0.0.1';
-const TOKEN = process.env.BOARD_TOKEN || '';
+const TOKEN = process.env.AMOX_TOKEN || process.env.BOARD_TOKEN || ''; // BOARD_TOKEN: pre-rename name
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
 const DATA_DIR = path.resolve(ROOT, process.env.DATA_DIR || 'data');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
@@ -32,7 +32,7 @@ const DEFAULT_MODEL = 'opus';
 const DEFAULT_EFFORT = 'high';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
-  console.error(`Refusing to listen on ${HOST} without BOARD_TOKEN. Set it in .env.`);
+  console.error(`Refusing to listen on ${HOST} without AMOX_TOKEN. Set it in .env.`);
   process.exit(1);
 }
 
@@ -77,7 +77,7 @@ function saveConfigFile(raw) {
 
 function buildConfig(raw) {
   // Main runs in the root folder that holds all projects (by default the
-  // parent of this repo), so it sees every project, including the board.
+  // parent of this repo), so it sees every project, including Amox itself.
   const lead = {
     cwd: path.resolve(home(raw.lead?.cwd || path.dirname(ROOT))),
     addDirs: (raw.lead?.addDirs || []).map(home),
@@ -163,7 +163,7 @@ function moveClaudeDirs(from, to) {
     const exact = name === oldKey;
     if (!exact && !(name.startsWith(oldKey + '-') && !siblings.length)) continue;
     const target = path.join(CLAUDE_PROJECTS, newKey + name.slice(oldKey.length));
-    if (fs.existsSync(target)) { console.warn(`[board] not moving ${name}: ${target} exists`); continue; }
+    if (fs.existsSync(target)) { console.warn(`[amox] not moving ${name}: ${target} exists`); continue; }
     fs.renameSync(path.join(CLAUDE_PROJECTS, name), target);
   }
 }
@@ -171,7 +171,7 @@ function moveClaudeDirs(from, to) {
 function moveProject(id, archive) {
   const proj = projectById(id);
   const from = proj.path;
-  if (path.resolve(from) === ROOT) throw httpError(409, "The board can't archive itself while it's running");
+  if (path.resolve(from) === ROOT) throw httpError(409, "Amox can't archive itself while it's running");
   if (archive === isArchivedPath(from)) return;
   const to = archive
     ? path.join(path.dirname(from), ARCHIVE_DIR, path.basename(from))
@@ -182,7 +182,7 @@ function moveProject(id, archive) {
   fs.renameSync(from, to);
   moveClaudeDirs(from, to);
   rescan();
-  console.log(`[board] ${archive ? 'archived' : 'unarchived'} ${id}: ${tilde(from)} -> ${tilde(to)}`);
+  console.log(`[amox] ${archive ? 'archived' : 'unarchived'} ${id}: ${tilde(from)} -> ${tilde(to)}`);
 }
 
 // ---------- storage ----------
@@ -238,7 +238,7 @@ for (const e of [db.lead, ...Object.values(db.chats), ...db.cards]) {
     e.run = null;
     e.lastRun = { state: 'interrupted', endedAt: now() };
     if (e.status === 'in_progress') e.status = 'review';
-    appendLog(e.id, { kind: 'system', text: 'Interrupted (board restarted)' });
+    appendLog(e.id, { kind: 'system', text: 'Interrupted (Amox restarted)' });
   }
 }
 save();
@@ -289,7 +289,7 @@ setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 25000
 function rescan() {
   let next;
   try { next = buildConfig(readConfigFile()); } catch (err) {
-    console.warn(`[board] ${err.message}`);
+    console.warn(`[amox] ${err.message}`);
     return;
   }
   if (JSON.stringify(next) === JSON.stringify(config)) return;
@@ -331,8 +331,8 @@ function workingCopyCommit(dir) {
   const index = path.join(DATA_DIR, `snapshot-index-${process.pid}-${Date.now()}`);
   const env = {
     ...process.env, GIT_INDEX_FILE: index,
-    GIT_AUTHOR_NAME: 'board', GIT_AUTHOR_EMAIL: 'board@localhost',
-    GIT_COMMITTER_NAME: 'board', GIT_COMMITTER_EMAIL: 'board@localhost',
+    GIT_AUTHOR_NAME: 'amox', GIT_AUTHOR_EMAIL: 'amox@localhost',
+    GIT_COMMITTER_NAME: 'amox', GIT_COMMITTER_EMAIL: 'amox@localhost',
   };
   const run = (...args) => execFileSync('git', ['-C', dir, ...args], {
     env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
@@ -342,7 +342,7 @@ function workingCopyCommit(dir) {
     run('add', '-A');
     const tree = run('write-tree');
     if (tree === run('rev-parse', 'HEAD^{tree}')) return null;
-    return run('commit-tree', tree, '-p', 'HEAD', '-m', 'board: working copy before card');
+    return run('commit-tree', tree, '-p', 'HEAD', '-m', 'amox: working copy before card');
   } finally {
     fs.rmSync(index, { force: true });
   }
@@ -423,7 +423,7 @@ function taskPrompt(card) {
 // session: replies go through as written, like typing in a terminal. How
 // to answer (length, tone) comes from the user's own CLAUDE.md files.
 function taskSystemPrompt(card, project) {
-  return `You're working on card ${card.id} ("${card.title}") from the user's board, in ${project.path}. `
+  return `You're working on card ${card.id} ("${card.title}") from the user's Amox board, in ${project.path}. `
     + 'Do not push to any remote unless asked.';
 }
 
@@ -468,6 +468,7 @@ function projectRun(entity, project, systemPrompt, prompt) {
   if (project.allowedTools.length) args.push('--allowedTools', project.allowedTools.join(','));
   if (entity.sessionId) args.push('--resume', entity.sessionId);
   const env = { ...process.env };
+  delete env.AMOX_TOKEN;
   delete env.BOARD_TOKEN;
   launch(entity, project.path, args, prompt, env);
 }
@@ -478,7 +479,7 @@ function runCard(card) {
   // Remember how the repo(s) looked before the card first touched them, so
   // Reject / Redo can put them back.
   if (!card.baseline) {
-    try { card.baseline = snapshot(card, project.path); } catch (err) { console.warn(`[board] snapshot ${card.id}: ${err.message}`); }
+    try { card.baseline = snapshot(card, project.path); } catch (err) { console.warn(`[amox] snapshot ${card.id}: ${err.message}`); }
   }
   projectRun(card, project, taskSystemPrompt(card, project), card.run.prompt);
 }
@@ -490,7 +491,7 @@ function runChat(key, text, { notice } = {}) {
   appendLog(chat.id, notice ? { kind: 'system', text: notice } : { kind: 'user', text });
   if (key !== 'main') {
     const project = projectById(key);
-    const system = `The user is chatting with you from their board, in project "${project.name || project.id}". `
+    const system = `The user is chatting with you from Amox, their project board, in project "${project.name || project.id}". `
       + `Work only inside ${project.path}. Do not push to any remote unless the user asks.`;
     return projectRun(chat, project, system, text);
   }
@@ -501,7 +502,7 @@ function runChat(key, text, { notice } = {}) {
   const args = [...baseArgs(config.lead), '--append-system-prompt', brief, '--allowedTools', tools.join(',')];
   for (const dir of config.lead.addDirs) args.push('--add-dir', dir);
   if (chat.sessionId) args.push('--resume', chat.sessionId);
-  const env = { ...process.env, BOARD_URL: `http://127.0.0.1:${PORT}`, BOARD_TOKEN: TOKEN, BOARD_FROM: 'main' };
+  const env = { ...process.env, AMOX_URL: `http://127.0.0.1:${PORT}`, AMOX_TOKEN: TOKEN, AMOX_FROM: 'main' };
   launch(chat, cwd, args, text, env);
 }
 
@@ -588,12 +589,12 @@ function finish(entity, lastRun) {
 }
 
 // Main only runs when it gets a message, so a card it started can't report
-// back by itself. When one ends, the board sends Main a notice with the
+// back by itself. When one ends, Amox sends Main a notice with the
 // card's last reply (queued while Main is busy) and Main tells the user.
 function tellMain(card, lastRun) {
   const last = readLog(card.id).reverse().find((e) => e.kind === 'text')?.text || '(no reply)';
   const ended = lastRun.state === 'done' ? 'finished' : 'failed';
-  const text = `[Board] Card ${card.id} "${card.title}" (${card.project}) ${ended}, now in ${card.status}. Its last reply:\n\n`
+  const text = `[Amox] Card ${card.id} "${card.title}" (${card.project}) ${ended}, now in ${card.status}. Its last reply:\n\n`
     + (last.length > 6000 ? last.slice(0, 6000) + '\n[…cut]' : last);
   (db.lead.inbox ||= []).push({ text, notice: `Card ${card.id} ${ended}. Telling Main.` });
   changed();
@@ -685,8 +686,8 @@ function cookie(req, name) {
 }
 
 const LOGIN_PAGE = `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Board</title><body style="font-family:system-ui;display:grid;place-items:center;min-height:90vh;background:#111;color:#eee">
-<form method=get style="display:grid;gap:8px;width:min(320px,90vw)"><label>Board token</label>
+<title>Amox</title><body style="font-family:system-ui;display:grid;place-items:center;min-height:90vh;background:#111;color:#eee">
+<form method=get style="display:grid;gap:8px;width:min(320px,90vw)"><label>Amox token</label>
 <input name=token type=password autofocus style="padding:10px;font-size:16px;border-radius:8px;border:1px solid #444;background:#222;color:#eee">
 <button style="padding:10px;font-size:16px;border-radius:8px">Open</button></form>`;
 
@@ -944,7 +945,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 server.listen(PORT, HOST, () => {
-  console.log(`Board on http://${HOST}:${PORT}${TOKEN ? ' (token required)' : ''}`);
+  console.log(`Amox on http://${HOST}:${PORT}${TOKEN ? ' (token required)' : ''}`);
   pump();
   flushMainInbox(); // notices left from before a restart
 });

@@ -1,5 +1,5 @@
 {
-  "name": "board",
+  "name": "amox",
   "private": true,
   "type": "module",
   "description": "Kanban board that runs Claude Code task agents per project, plus a lead agent you chat with.",

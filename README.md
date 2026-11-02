@@ -1,6 +1,6 @@
-# Board
+# Amox
 
-A kanban board for all projects. Cards run Claude Code task agents, and a lead agent you chat with turns ideas into cards. No dependencies, just Node 22+ and the `claude` CLI logged in.
+A kanban board for all projects. The name is from Nahuatl *amoxtli*, the codex where the Mexica kept their records. Cards run Claude Code task agents, and a lead agent you chat with turns ideas into cards. No dependencies, just Node 22+ and the `claude` CLI logged in.
 
 ## Run
 
@@ -23,10 +23,10 @@ Open http://127.0.0.1:4700.
   - **Reject**: revert the card's changes, back to Ready with a fresh session.
   - **Redo**: revert, then run the card again from scratch.
 
-  Revert uses git. Before a card first runs, the board records each repo in the project folder (the folder itself, or its direct subfolders for multi-repo folders): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
+  Revert uses git. Before a card first runs, Amox records each repo in the project folder (the folder itself, or its direct subfolders for multi-repo folders): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
 - One running card per project at a time, since they share the working tree. Others wait as Queued.
-- **Main** is a Claude session in the root projects folder (`lead.cwd` in `projects.json`, default: the folder that holds this repo). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, the board sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
-- **The board is a project too** (`board` tab). Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
+- **Main** is a Claude session in the root projects folder (`lead.cwd` in `projects.json`, default: the folder that holds this repo). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
+- **Amox is a project too** (the `board` tab, after its folder). Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
 
 ## Projects
 
@@ -43,14 +43,14 @@ Open http://127.0.0.1:4700.
 
 Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows as "Not allowed: …".
 
-Skipping permissions means agents can do anything your user can on this machine. Run the board somewhere isolated before giving it anything you can't lose.
+Skipping permissions means agents can do anything your user can on this machine. Run Amox somewhere isolated before giving it anything you can't lose.
 
 ## Phone access
 
 Set a token in `.env` before exposing it:
 
 ```
-BOARD_TOKEN=<long random string>
+AMOX_TOKEN=<long random string>
 HOST=0.0.0.0
 ```
 
@@ -58,7 +58,7 @@ Easiest is [Tailscale](https://tailscale.com) on the Mac and the phone: open `ht
 
 ## Hosting later
 
-The board runs agents on the machine it lives on, so a server needs the repos cloned, Node, and `claude` logged in there. Point `projects.json` at those paths, set `BOARD_TOKEN`, and put it behind HTTPS (Coolify, Caddy, or `tailscale serve`). Env: `PORT`, `HOST`, `BOARD_TOKEN`, `DATA_DIR`, `PROJECTS_FILE`, `CLAUDE_BIN`.
+Amox runs agents on the machine it lives on, so a server needs the repos cloned, Node, and `claude` logged in there. Point `projects.json` at those paths, set `AMOX_TOKEN`, and put it behind HTTPS (Coolify, Caddy, or `tailscale serve`). Env: `PORT`, `HOST`, `AMOX_TOKEN` (the old `BOARD_TOKEN` still works), `DATA_DIR`, `PROJECTS_FILE`, `CLAUDE_BIN`.
 
 ## Files
 

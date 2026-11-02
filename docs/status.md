@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-01.
+As of 2026-11-02. Renamed from Board to Amox.
 
 ## Works
 
@@ -21,7 +21,7 @@ Only locally, against a throwaway project: task run, resume, sandbox blocking wr
 
 - Isolation: agents skip permissions on the user's own Mac for now. Plan is to move the board somewhere isolated.
 - Not hosted. Phone access planned through Tailscale first (see README).
-- Repo: github.com/maurovz/board (private).
+- Repo: github.com/maurovz/board (private). The GitHub repo and local folder still use the old name.
 - Project KBs that live outside their repo (`knowledge/projects/<slug>/`, for client and open source repos) aren't passed to agents yet.
 - A project chat and a running card in the same folder don't wait for each other.
 - No tests.

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Board CLI. Used by the lead agent (and by you) to manage cards.
-// Talks to the running server at BOARD_URL (default http://127.0.0.1:4700).
+// Amox CLI. Used by the lead agent (and by you) to manage cards.
+// Talks to the running server at AMOX_URL (default http://127.0.0.1:4700).
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 try { process.loadEnvFile(path.join(ROOT, '.env')); } catch {}
-const BASE = process.env.BOARD_URL || `http://127.0.0.1:${process.env.PORT || 4700}`;
-const TOKEN = process.env.BOARD_TOKEN || '';
+const BASE = process.env.AMOX_URL || process.env.BOARD_URL || `http://127.0.0.1:${process.env.PORT || 4700}`;
+const TOKEN = process.env.AMOX_TOKEN || process.env.BOARD_TOKEN || '';
 
 const USAGE = `Usage: node cli.js <command>
   projects                                   List project ids
@@ -40,8 +40,8 @@ async function api(method, url, body) {
     headers: {
       'content-type': 'application/json',
       ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}),
-      // Set by the board for Main, so cards Main starts report back to it.
-      ...(process.env.BOARD_FROM ? { 'x-board-from': process.env.BOARD_FROM } : {}),
+      // Set by Amox for Main, so cards Main starts report back to it.
+      ...((process.env.AMOX_FROM || process.env.BOARD_FROM) ? { 'x-board-from': process.env.AMOX_FROM || process.env.BOARD_FROM } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });

@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-02. Renamed to Amox
+
+"Board" was too generic. Amox is short for Nahuatl *amoxtli*, the codex where the Mexica kept their records. Only the name changed: the folder, the `board` project id, `data/board.json`, `refs/board/` snapshots, browser storage keys, the login cookie and the `x-board-from` header keep their old names so the live install, saved settings and existing card snapshots keep working. Env vars are now `AMOX_*`, with `BOARD_*` still read as a fallback.
+
 ## 2026-11-01. Cards report back to Main
 
 Main said "I'll show you the commit when c1 finishes" and never did: it only runs when it gets a message. Now, when a run that Main started or replied to ends (finished or failed, not stopped), the board sends Main a `[Board]` message with the card's last reply, queued if Main is busy, and Main tells the user. `cli.js` marks Main's calls with `x-board-from: main`. Runs the user starts from the UI don't notify, so Main isn't woken for nothing.
