@@ -237,7 +237,7 @@ for (const e of [db.lead, ...Object.values(db.chats), ...db.cards]) {
   if (e.run?.state === 'running') {
     e.run = null;
     e.lastRun = { state: 'interrupted', endedAt: now() };
-    if (e.status === 'in_progress') e.status = 'review';
+    if (e.status === 'in_progress') e.status = 'ready';
     appendLog(e.id, { kind: 'system', text: 'Interrupted (Amox restarted)' });
   }
 }
@@ -572,7 +572,9 @@ function finish(entity, lastRun) {
   const run = entity.run;
   entity.run = null;
   entity.lastRun = { ...lastRun, endedAt: now() };
-  if (entity.status === 'in_progress') entity.status = 'review';
+  // A failed run has nothing to review: back to Ready with a Failed badge.
+  // The session is kept, so Resume picks up where it stopped.
+  if (entity.status === 'in_progress') entity.status = lastRun.state === 'failed' ? 'ready' : 'review';
   if (entity.status) entity.updatedAt = now();
   // No cost shown: on a Claude subscription total_cost_usd is only an API-price
   // estimate, nothing is billed per run.

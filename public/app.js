@@ -119,7 +119,7 @@ setView(store('board.view') || 'chat');
 function badge(card) {
   if (card.run) return `<span class="badge ${card.run.state}">${card.run.state === 'running' ? 'Running' : 'Queued'}</span>`;
   const last = card.lastRun?.state;
-  if (card.status === 'review' && last && last !== 'done') return `<span class="badge ${last}">${last[0].toUpperCase() + last.slice(1)}</span>`;
+  if (['ready', 'review'].includes(card.status) && last && last !== 'done') return `<span class="badge ${last}">${last[0].toUpperCase() + last.slice(1)}</span>`;
   return '';
 }
 
@@ -487,7 +487,9 @@ function renderCardSheet(full) {
   $('#cardStart').hidden = running;
   $('#cardStart').textContent = card.sessionId ? 'Resume ▶' : 'Start ▶';
   $('#cardDelete').disabled = running;
-  $('#cardReview').hidden = running || card.status !== 'review';
+  // Failed cards wait in Ready, but can still be reverted or redone.
+  const failed = card.status === 'ready' && ['failed', 'interrupted'].includes(card.lastRun?.state);
+  $('#cardReview').hidden = running || !(card.status === 'review' || failed);
   const reply = $('#cardReply');
   reply.hidden = !card.sessionId;
   setComposerBusy(reply, running);

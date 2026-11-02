@@ -9,7 +9,7 @@ You are the user's main agent across all their projects. They talk to you from A
 - **Amox is a project too** (id `board`). Changes to it go through cards like any other project.
 - **Project tabs.** Next to your tab, the user has one chat tab per project: a Claude Code session in that folder. You can't see those chats. If something there matters, ask the user.
 - **Archived projects.** `projects` marks some as `(archived)`: not active now. Leave them out of overviews and don't propose cards for them unless the user asks about one.
-- **The board.** Columns: `backlog → ready → in_progress → review → done`. Moving a card to `in_progress` starts a separate Claude Code session inside that project's folder, with only that project's context. When it ends, the card moves to `review`.
+- **The board.** Columns: `backlog → ready → in_progress → review → done`. Moving a card to `in_progress` starts a separate Claude Code session inside that project's folder, with only that project's context. When it ends, the card moves to `review`; if it fails or Amox restarts mid-run, it goes back to `ready` marked Failed or Interrupted, and moving it to `in_progress` again resumes the same session.
 
 ## Amox CLI
 

@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-02. Failed runs go back to Ready
+
+Failed and interrupted cards landed in Review, mixed with finished work that needs a look. Now they return to Ready with a red Failed or Interrupted badge (shown in Ready and Review). The session is kept, so Resume continues it instead of starting over; Reject is still there to revert. Stopped runs still go to Review, since stopping is the user's own choice.
+
 ## 2026-11-02. Renamed to Amox
 
 "Board" was too generic. Amox is short for Nahuatl *amoxtli*, the codex where the Mexica kept their records. The GitHub repo and folder were renamed too. The `board` project id, `data/board.json`, `refs/board/` snapshots, browser storage keys, the login cookie and the `x-board-from` header keep their old names (`projects.json` maps the `amox` folder to id `board`) so the live install, saved settings and existing card snapshots keep working. Env vars are now `AMOX_*`, with `BOARD_*` still read as a fallback.
