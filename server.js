@@ -459,18 +459,39 @@ function baseArgs({ permissionMode, model, effort }) {
     '--model', model, '--effort', effort];
 }
 
+// Amox's own state holds every project's cards and the master token, so
+// project agents (cards and project chats) can't read or change it. Deny
+// rules apply even when permissions are skipped. Bash honors them for plain
+// file commands (cat, head); with the project's sandbox on, for everything.
+const BOARD_FILES = [path.join(DATA_DIR, '**'), PROJECTS_FILE, path.join(ROOT, '.env')];
+const BOARD_DENY = ['Read', 'Edit', 'Write'].flatMap((tool) => BOARD_FILES.map((f) => `${tool}(/${f})`));
+
 // A project session: runs in the project folder with that project's rules.
-function projectRun(entity, project, systemPrompt, prompt) {
+// extra: { env, allowedTools, unsandboxed } added on top (project chats use
+// it for cli.js). unsandboxed: commands that may run outside the sandbox,
+// since it blocks localhost. A chained command stays fully sandboxed.
+function projectRun(entity, project, systemPrompt, prompt, extra = {}) {
   const args = [...baseArgs(project), '--append-system-prompt', systemPrompt];
+  const settings = { permissions: { deny: BOARD_DENY } };
   if (project.sandbox) {
-    args.push('--settings', JSON.stringify({ sandbox: { enabled: true, autoAllowBashIfSandboxed: true } }));
+    settings.sandbox = { enabled: true, autoAllowBashIfSandboxed: true, excludedCommands: extra.unsandboxed || [] };
   }
-  if (project.allowedTools.length) args.push('--allowedTools', project.allowedTools.join(','));
+  args.push('--settings', JSON.stringify(settings));
+  const tools = [...project.allowedTools, ...(extra.allowedTools || [])];
+  if (tools.length) args.push('--allowedTools', tools.join(','));
   if (entity.sessionId) args.push('--resume', entity.sessionId);
   const env = { ...process.env };
-  delete env.AMOX_TOKEN;
-  delete env.BOARD_TOKEN;
-  launch(entity, project.path, args, prompt, env);
+  for (const k of ['AMOX_TOKEN', 'BOARD_TOKEN', 'AMOX_FROM', 'BOARD_FROM', 'AMOX_URL', 'BOARD_URL']) delete env[k];
+  launch(entity, project.path, args, prompt, { ...env, ...extra.env });
+}
+
+// Project chats manage their own project's cards through cli.js with a
+// token that only works for that project (see authorize). Tokens are made
+// fresh on every server start; each run gets the current one.
+const projectTokens = new Map();
+function projectToken(id) {
+  if (!projectTokens.has(id)) projectTokens.set(id, `p_${crypto.randomBytes(24).toString('hex')}`);
+  return projectTokens.get(id);
 }
 
 function runCard(card) {
@@ -492,8 +513,17 @@ function runChat(key, text, { notice } = {}) {
   if (key !== 'main') {
     const project = projectById(key);
     const system = `The user is chatting with you from Amox, their project board, in project "${project.name || project.id}". `
-      + `Work only inside ${project.path}. Do not push to any remote unless the user asks.`;
-    return projectRun(chat, project, system, text);
+      + `Work only inside ${project.path}. Do not push to any remote unless the user asks.\n\n`
+      + `You can manage this project's cards on the board (and only this project's) with \`node ${CLI} <command>\`: `
+      + '`list [--status s]`, `show <id> [--log n]`, `add --title "..." [--details "..."] [--status backlog|ready]`, '
+      + '`edit <id> [--title "..."] [--details "..."]`, `move <id> <backlog|ready|in_progress|review|done> [--message "..."]`, '
+      + '`reply <id> "..."`, `stop <id>`. Moving a card to in_progress starts a separate task agent in this folder; '
+      + 'do that only when the user asks.';
+    return projectRun(chat, project, system, text, {
+      env: { AMOX_URL: `http://127.0.0.1:${PORT}`, AMOX_TOKEN: projectToken(project.id) },
+      allowedTools: [`Bash(node ${CLI}:*)`],
+      unsandboxed: [`node ${CLI}:*`],
+    });
   }
   const { cwd } = config.lead;
   const cli = path.relative(cwd, CLI);
@@ -693,12 +723,19 @@ const LOGIN_PAGE = `<!doctype html><meta name=viewport content="width=device-wid
 <input name=token type=password autofocus style="padding:10px;font-size:16px;border-radius:8px;border:1px solid #444;background:#222;color:#eee">
 <button style="padding:10px;font-size:16px;border-radius:8px">Open</button></form>`;
 
+// Returns who is asking: {} for full access (the UI, Main, the user's CLI),
+// { project } for a project chat's token, or null (response already sent).
+// Without AMOX_TOKEN anything local gets full access, so the project limit
+// only holds when a token is set.
 function authorize(req, res, url) {
-  if (!TOKEN) return true;
   const header = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (header && safeEqual(header, TOKEN)) return true;
+  if (header.startsWith('p_')) {
+    for (const [project, t] of projectTokens) if (safeEqual(header, t)) return { project };
+  }
+  if (!TOKEN) return {};
+  if (header && safeEqual(header, TOKEN)) return {};
   const c = cookie(req, 'board_token');
-  if (c && safeEqual(c, TOKEN)) return true;
+  if (c && safeEqual(c, TOKEN)) return {};
   const q = url.searchParams.get('token');
   if (req.method === 'GET' && q && safeEqual(q, TOKEN)) {
     const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
@@ -708,11 +745,21 @@ function authorize(req, res, url) {
       location: url.pathname + url.search,
     });
     res.end();
-    return false;
+    return null;
   }
   if (url.pathname.startsWith('/api/')) send(res, 401, { error: 'Unauthorized' });
   else { res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' }); res.end(LOGIN_PAGE); }
-  return false;
+  return null;
+}
+
+// What a project token may call: its project's cards, nothing else.
+function scopedState(project) {
+  const s = publicState();
+  return {
+    statuses: s.statuses,
+    projects: s.projects.filter((p) => p.id === project),
+    cards: s.cards.filter((c) => c.project === project),
+  };
 }
 
 const STATIC = {
@@ -725,10 +772,18 @@ const STATIC = {
 
 async function handle(req, res) {
   const url = new URL(req.url, 'http://board');
-  if (!authorize(req, res, url)) return;
+  const auth = authorize(req, res, url);
+  if (!auth) return;
   const p = url.pathname;
   const m = req.method;
-  const fromMain = req.headers['x-board-from'] === 'main';
+  const scope = auth.project; // set: a project chat, limited to that project's cards
+  const fromMain = !scope && req.headers['x-board-from'] === 'main';
+
+  if (scope) {
+    const cardRoute = (m === 'POST' && p === '/api/cards') || /^\/api\/cards\/c\d+(\/[a-z]+)?$/.test(p);
+    if (m === 'GET' && p === '/api/state') return send(res, 200, scopedState(scope));
+    if (!cardRoute) throw httpError(403, `This token only manages ${scope}'s cards`);
+  }
 
   if (m === 'GET' && STATIC[p]) {
     const [file, type] = STATIC[p];
@@ -749,6 +804,10 @@ async function handle(req, res) {
 
   if (m === 'POST' && p === '/api/cards') {
     const b = await readBody(req);
+    if (scope) {
+      b.project ||= scope;
+      if (b.project !== scope) throw httpError(403, `This token only manages ${scope}'s cards`);
+    }
     if (!projectById(b.project)) throw httpError(400, 'Unknown project');
     if (!b.title?.trim()) throw httpError(400, 'Title required');
     const status = b.status || 'backlog';
@@ -767,10 +826,14 @@ async function handle(req, res) {
   let r;
   if ((r = p.match(/^\/api\/cards\/(c\d+)(\/[a-z]+)?$/))) {
     const card = getCard(r[1]);
+    if (scope && card.project !== scope) throw httpError(404, 'Card not found');
     const action = r[2];
 
     if (!action && m === 'PATCH') {
       const b = await readBody(req);
+      if (scope && b.project !== undefined && b.project !== card.project) {
+        throw httpError(403, `This token only manages ${scope}'s cards`);
+      }
       if (b.title !== undefined) {
         if (!String(b.title).trim()) throw httpError(400, 'Title required');
         card.title = String(b.title).trim();

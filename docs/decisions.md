@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-04. Project tabs manage their own cards, with a scoped token
+
+From a project tab the user couldn't touch the board. Running project tabs from the root folder instead was rejected: they'd lose the project's `CLAUDE.md`, settings and git context. And adding a config file to each repo was out, since some repos are strict about what gets committed. Now a project tab stays in its folder and gets `cli.js` plus a token made for that project, fresh on every server start. The server only lets that token reach the project's own cards (a header could be faked, a token can't). Main keeps the master token and sees everything. Project agents are denied Amox's `data/`, `projects.json` and `.env` through `--settings` deny rules, so they can't read other projects' cards or the master token from disk. In sandboxed projects `cli.js` runs outside the sandbox, which blocks localhost. A chained command stays fully sandboxed. This only holds with `AMOX_TOKEN` set. It's a guard against agents wandering, not a wall: an unsandboxed agent running as the same user could still dig the token out another way.
+
 ## 2026-11-02. Failed runs go back to Ready
 
 Failed and interrupted cards landed in Review, mixed with finished work that needs a look. Now they return to Ready with a red Failed or Interrupted badge (shown in Ready and Review). The session is kept, so Resume continues it instead of starting over; Reject is still there to revert. Stopped runs still go to Review, since stopping is the user's own choice.
