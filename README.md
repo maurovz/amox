@@ -15,7 +15,7 @@ Open http://127.0.0.1:4700.
 
 - **Chat pane, always visible.** Tabs: **Main** (the lead, sees every project and the board) and one tab per project (Claude Code running in that folder, like a terminal there). The active tab also filters the board. On a phone, switch between Chat and Board at the top.
 - **Tab order:** drag project tabs to reorder them (on a phone, hold a tab, then drag). Main stays first. Saved as `order` in `projects.json`.
-- **Columns:** Backlog, Ready, In progress, Review, Done.
+- **Columns:** Backlog, Ready, In progress, Review, Done. **Clear** in the Done header deletes the Done cards shown (every project on Main, only that project on its tab) and their transcripts, after asking.
 - **In progress = go.** Moving a card there runs `claude -p` inside that project's folder, so it loads only that project's `CLAUDE.md` and memory, as if you opened Claude Code there. When it ends, the card moves to Review. If it fails (or Amox restarts mid-run), it goes back to Ready with a **Failed** (or **Interrupted**) badge instead; **Resume** continues the same session, and the review buttons stay available to revert or redo it.
 - **Reply** on a card to ask or add something in the same session. A card is one Claude Code session and a reply is the next message, exactly like a terminal. The card stays in its column while it's answered. How long and how the agents answer comes from your `CLAUDE.md` files (global `~/.claude/CLAUDE.md` and the project's), as in the terminal. **Stop** (it replaces Send while the agent works, or press Esc in the message box) kills the run, like Esc in the terminal.
 - **Review buttons** (fixed actions, the agent isn't asked anything):

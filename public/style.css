@@ -202,7 +202,10 @@ body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 }
 .col.over { outline: 2px dashed var(--accent); }
 .col-head { display: flex; justify-content: space-between; padding: 4px 6px 8px; font-weight: 600; font-size: 13px; }
+.col-head { align-items: center; }
 .col-head .count { color: var(--muted); font-weight: 500; }
+.col-tools { display: inline-flex; align-items: center; gap: 4px; }
+.col-head .clear-done { padding: 2px 8px; margin: -4px 0; font-size: 12px; font-weight: 500; }
 .cards { display: flex; flex-direction: column; gap: 8px; }
 .card {
   background: var(--panel);

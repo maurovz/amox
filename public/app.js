@@ -129,7 +129,8 @@ function renderBoard() {
   $('#board').innerHTML = state.statuses.map((s) => {
     const col = cards.filter((c) => c.status === s).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     return `<section class="col" data-status="${s}">
-      <div class="col-head"><span>${LABELS[s]}</span><span class="count">${col.length}</span></div>
+      <div class="col-head"><span>${LABELS[s]}</span><span class="col-tools">${s === 'done' && col.length
+        ? '<button class="btn ghost danger clear-done" title="Delete every card shown in Done">Clear</button>' : ''}<span class="count">${col.length}</span></span></div>
       <div class="cards">${col.map((c) => `
         <article class="card" data-id="${c.id}" draggable="${!touch}">
           <div class="t">${esc(c.title)}</div>
@@ -140,6 +141,7 @@ function renderBoard() {
 }
 
 $('#board').addEventListener('click', (e) => {
+  if (e.target.closest('.clear-done')) return clearDone();
   const card = e.target.closest('.card');
   if (card) openCard(card.dataset.id);
 });
@@ -165,6 +167,19 @@ $('#board').addEventListener('drop', guard(async (e) => {
   const id = e.dataTransfer.getData('text/plain');
   if (col && id) await moveCard(id, col.dataset.status);
 }));
+
+// Deletes the Done cards the board shows now (all projects on Main, one project
+// on its tab). Cards still answering a reply are skipped.
+const clearDone = guard(async () => {
+  const all = tab === 'main';
+  const done = state.cards.filter((c) => c.status === 'done' && (all ? !isArchived(c.project) : c.project === tab));
+  const ids = done.filter((c) => !c.run).map((c) => c.id);
+  if (!ids.length) return toast('Nothing to clear: the Done cards are still running');
+  const where = all ? '' : ` in ${projectName(tab)}`;
+  if (!confirm(`Delete ${ids.length} Done card${ids.length === 1 ? '' : 's'}${where} and their transcripts?`)) return;
+  for (const id of ids) await api('DELETE', `/api/cards/${id}`);
+  if (ids.length < done.length) toast(`${done.length - ids.length} running card(s) kept`);
+});
 
 async function moveCard(id, status) {
   const card = state.cards.find((c) => c.id === id);
