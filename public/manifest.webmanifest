@@ -3,7 +3,7 @@
   "short_name": "Amox",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#111114",
-  "theme_color": "#16161a",
+  "background_color": "#121212",
+  "theme_color": "#171716",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
 }
