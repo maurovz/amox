@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-07. Projects folder picked in the UI, state in ~/.amox
+
+To open source Amox, setup can't depend on cloning it inside the projects folder (Main's root defaulted to the repo's parent). On first start the UI now asks where the projects are, with no guessed default. Browsers can't return a real path from the OS folder dialog, so Amox serves a small folder browser (`/api/folders`), which also works from the phone. The choice is saved as `lead.cwd`. New installs keep `.env`, `projects.json` and `data/` in `~/.amox` (`AMOX_HOME`) so `npx amox` and updates never touch them. Installs that already have them in the repo keep that, and keep the old parent-folder default, so the live board is unchanged. Windows got the cheap fixes (home folder, taskkill, deny-rule paths) and is labeled experimental, with WSL recommended.
+
 ## 2026-11-07. Project overview lives in the tab strip, not a new view
 
 The user wanted to see at a glance which projects are active, without bloating the product. Trello doesn't have a cross-board status view in the base product either: boards are listed, and closing a board is how you mark it inactive (Amox's Archive does that). So no dashboard. Each tab's dot now also lights up for a running card (before, only for the chat) and turns amber for cards in Review or failed. It was also unclear that the tabs scroll. The usual fix (Chrome, VS Code, Material tabs) is an edge fade plus an overflow button that lists every tab. That list also gives each project a one-line summary, so it doubles as the overview.

@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // Amox CLI. Used by the lead agent (and by you) to manage cards.
 // Talks to the running server at AMOX_URL (default http://127.0.0.1:4700).
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// .env lives in the repo (older installs) or in ~/.amox (AMOX_HOME), like the server's.
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-try { process.loadEnvFile(path.join(ROOT, '.env')); } catch {}
+const STATE_DIR = process.env.AMOX_HOME?.replace(/^~(?=[\\/]|$)/, os.homedir()) || path.join(os.homedir(), '.amox');
+for (const dir of [ROOT, STATE_DIR]) { try { process.loadEnvFile(path.join(dir, '.env')); } catch {} }
 const BASE = process.env.AMOX_URL || process.env.BOARD_URL || `http://127.0.0.1:${process.env.PORT || 4700}`;
 const TOKEN = process.env.AMOX_TOKEN || process.env.BOARD_TOKEN || '';
 

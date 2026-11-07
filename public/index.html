@@ -112,8 +112,24 @@
       <label class="field"><span class="muted small">Model</span><select name="model"></select></label>
       <label class="field"><span class="muted small">Effort</span><select name="effort"></select></label>
       <p class="muted small">Used by this tab's chat and its cards, from the next message on.</p>
+      <div id="rootRow" class="field" hidden>
+        <span class="muted small">Projects folder</span>
+        <div class="row"><span id="rootPath" class="path"></span><span class="grow"></span><button type="button" id="rootChange" class="btn">Change</button></div>
+      </div>
       <button class="btn primary">Save</button>
     </form>
+  </dialog>
+
+  <!-- Projects folder picker: on first start, and from Main's settings -->
+  <dialog id="folderDlg" class="sheet small-sheet">
+    <div class="sheet-head">
+      <button type="button" id="folderClose" class="icon" data-close aria-label="Close">✕</button>
+      <strong>Where are your projects?</strong>
+    </div>
+    <p class="muted small">Pick the folder that holds your projects. Each folder inside it becomes a project, and Main works from there.</p>
+    <div id="folderPath" class="path"></div>
+    <div id="folderList" class="folder-list"></div>
+    <button id="folderUse" class="btn primary">Use this folder</button>
   </dialog>
 
   <!-- All projects, with what each is doing -->

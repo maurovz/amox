@@ -4,12 +4,19 @@ A kanban board for all projects. The name is from Nahuatl *amoxtli*, the codex w
 
 ## Run
 
+Needs Node 22+ and [Claude Code](https://claude.com/claude-code) installed and logged in (`claude` on your PATH, or set `CLAUDE_BIN`).
+
 ```
-cd ~/code/amox
+git clone https://github.com/maurovz/amox
+cd amox
 npm start
 ```
 
-Open http://127.0.0.1:4700.
+(`npx amox` once it's on npm.) Open http://127.0.0.1:4700. On first start Amox asks where your projects are: browse to the folder that holds them and pick **Use this folder**. Change it later from **⚙** on the Main tab.
+
+Amox keeps its own state in `~/.amox`: `.env`, `projects.json` and `data/` (set `AMOX_HOME` to move it). A clone that already has them in the repo folder keeps using those.
+
+**Platforms.** macOS is what it's used on daily. Linux should work but is untested. Windows is experimental: use WSL, or run it natively with Claude Code's native installer (`claude.exe` on the PATH). The `sandbox` option doesn't work on native Windows.
 
 ## How it works
 
@@ -27,14 +34,14 @@ Open http://127.0.0.1:4700.
   Revert uses git. Before a card first runs, Amox records each repo in the project folder (the folder itself, or its direct subfolders for multi-repo folders): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
 - One running card per project at a time, since they share the working tree. Others wait as Queued.
 - **Project tabs manage their own cards.** Ask a project tab to list, add, edit, move, start or reply to cards and it uses `cli.js`, but only for that project: it gets its own token, and the server refuses its requests for other projects' cards, chats and settings. Main still manages everything. The limit only holds with `AMOX_TOKEN` set (without one, any local request gets full access). Project agents (tabs and cards) also can't read or change Amox's `data/`, `projects.json` or `.env`; with `sandbox` on, that holds for every Bash command too.
-- **Main** is a Claude session in the root projects folder (`lead.cwd` in `projects.json`, default: the folder that holds this repo). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
+- **Main** is a Claude session in the root projects folder (picked on first start, saved as `lead.cwd` in `projects.json`). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
 - **Amox is a project too** (its own tab). Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
 
 ## Projects
 
 **Archive.** A project that is not active now can be archived from its tab (**Archive** button, asks first). Its folder moves into an `archive` folder next to it (`~/code/my-app` → `~/code/archive/my-app`), together with Claude Code's memory and sessions for that path (`~/.claude/projects/`), and `projects.json` gets the new path. In the board it goes into the **Archive** folder at the end of the tabs, and its cards leave Main. **Unarchive** moves everything back. Close the project in editors and terminals before archiving.
 
-**Discovered, not listed.** Every folder in the root (`lead.cwd`, default `~/code`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up when you tap **↻** (top bar), no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
+**Discovered, not listed.** Every folder in the projects folder (`lead.cwd`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up when you tap **↻** (top bar), no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
 
 `projects.json` (optional, not committed, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
 
@@ -49,7 +56,7 @@ Skipping permissions means agents can do anything your user can on this machine.
 
 ## Phone access
 
-Set a token in `.env` before exposing it:
+Set a token in `~/.amox/.env` before exposing it:
 
 ```
 AMOX_TOKEN=<long random string>
@@ -60,11 +67,11 @@ Easiest is [Tailscale](https://tailscale.com) on the Mac and the phone: open `ht
 
 ## Hosting later
 
-Amox runs agents on the machine it lives on, so a server needs the repos cloned, Node, and `claude` logged in there. Point `projects.json` at those paths, set `AMOX_TOKEN`, and put it behind HTTPS (Coolify, Caddy, or `tailscale serve`). Env: `PORT`, `HOST`, `AMOX_TOKEN` (the old `BOARD_TOKEN` still works), `DATA_DIR`, `PROJECTS_FILE`, `CLAUDE_BIN`.
+Amox runs agents on the machine it lives on, so a server needs the repos cloned, Node, and `claude` logged in there. Point `projects.json` at those paths, set `AMOX_TOKEN`, and put it behind HTTPS (Coolify, Caddy, or `tailscale serve`). Env: `PORT`, `HOST`, `AMOX_TOKEN` (the old `BOARD_TOKEN` still works), `AMOX_HOME`, `DATA_DIR`, `PROJECTS_FILE`, `CLAUDE_BIN`.
 
 ## Files
 
 - `server.js`: API, agent runner, live updates (SSE).
 - `cli.js`: card commands, used by the lead and by you.
 - `public/`: the UI.
-- `data/`: cards and transcripts (`logs/<id>.jsonl`, raw stream in `<id>.raw.jsonl`).
+- `~/.amox/data/` (or `data/` in older installs): cards and transcripts (`logs/<id>.jsonl`, raw stream in `<id>.raw.jsonl`).

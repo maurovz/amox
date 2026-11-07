@@ -1,8 +1,19 @@
 {
   "name": "amox",
-  "private": true,
-  "type": "module",
+  "version": "0.1.0",
   "description": "Kanban board that runs Claude Code task agents per project, plus a lead agent you chat with.",
+  "type": "module",
+  "bin": {
+    "amox": "server.js"
+  },
+  "files": [
+    "server.js",
+    "cli.js",
+    "public/",
+    "lead/",
+    "projects.example.json",
+    "README.md"
+  ],
   "scripts": {
     "start": "node server.js"
   },

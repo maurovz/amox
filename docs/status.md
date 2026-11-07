@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-07. Tabs show what each project is doing, and a list at the end of the tabs shows every project.
+As of 2026-11-07. Getting ready to open source: first-run folder picker, state in `~/.amox`, runnable with `npx`, first Windows support.
 
 ## Works
 
@@ -11,6 +11,8 @@ As of 2026-11-07. Tabs show what each project is doing, and a list at the end of
 - Agents (cards, project chats, Main) skip permissions by default. Deny rules and hooks still apply. Per project, `acceptEdits` plus `sandbox` locks one down.
 - Projects are discovered from the root folder (↻ picks up new folders); `projects.json` only overrides.
 - Tab dots show activity per project (chat or card running, unread, cards in Review or failed). The ⌄ after the tabs lists all projects with a short summary; the strip fades where more tabs are hidden.
+- First start asks for the projects folder (a folder browser served by Amox); ⚙ on Main changes it. New installs keep `.env`, `projects.json` and `data/` in `~/.amox`; this install still keeps them in the repo. `package.json` has a `bin`, so `npx amox` works (tested from a packed tarball); not published yet.
+- Windows: home folder, Stop (taskkill) and deny-rule paths handled, agents spawn without a console window. Untested, labeled experimental.
 - Review: Approve, Reject (git revert, back to Ready), Redo (revert and rerun). Tested on a scratch repo: exact restore, refuses after a push.
 - Archive / unarchive a project (moves its folder and its Claude Code memory).
 - Token auth (cookie after `?token=` once), so it can be exposed.
@@ -23,7 +25,8 @@ Only locally, against a throwaway project: task run, resume, sandbox blocking wr
 
 - Isolation: agents skip permissions on the user's own Mac for now. Plan is to move the board somewhere isolated.
 - Not hosted. Phone access planned through Tailscale first (see README).
-- Repo: github.com/maurovz/amox (private), folder `~/code/amox`. The project id stays `board` (set in `projects.json`) so existing cards stay attached.
+- Repo: github.com/maurovz/amox (private for now), folder `~/code/amox`. The project id stays `board` (set in `projects.json`) so existing cards stay attached.
 - Project KBs that live outside their repo (`knowledge/projects/<slug>/`, for client and open source repos) aren't passed to agents yet.
 - A project chat and a running card in the same folder don't wait for each other.
 - No tests.
+- Open source: still to do. Pick a license, publish to npm, make `lead/brief.md` work without the user's `knowledge/` folder, safer default than skipping permissions for new users, README for strangers (screenshot, quickstart first).

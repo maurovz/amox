@@ -190,6 +190,15 @@ dialog.menu::backdrop { background: transparent; }
 .prow .muted { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prow.archived .pname { font-style: italic; }
 .phead { margin: 8px 10px 4px; }
+.path { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.folder-list {
+  display: flex; flex-direction: column; min-height: 160px; max-height: 50vh; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 10px; padding: 4px;
+}
+.folder-list .prow:not(.up)::after { content: "›"; color: var(--muted); font-size: 18px; }
+.folder-list .prow.up { color: var(--muted); }
+.folder-list .prow.up::before { content: "↑"; }
+@media (max-width: 640px) { .folder-list { flex: 1; max-height: none; } }
 .tabs .sep { flex: none; width: 1px; margin: 8px 4px; background: var(--border); }
 .chat-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 12px; min-height: 42px; }
 .chat .log { padding: 10px 12px; }
@@ -269,7 +278,7 @@ dialog.sheet {
   gap: 10px;
 }
 dialog.sheet[open] { display: flex; }
-dialog.small-sheet { height: auto; width: min(520px, 100vw); }
+dialog.small-sheet { height: fit-content; width: min(520px, 100vw); }
 dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 @media (max-width: 640px) {
   dialog.sheet {

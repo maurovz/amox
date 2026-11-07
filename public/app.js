@@ -464,6 +464,8 @@ $('#chatSettings').addEventListener('click', () => {
   f.effort.innerHTML = efforts.map((e) => opt(e, e[0].toUpperCase() + e.slice(1), defaults.effort)).join('');
   f.model.value = cur.model;
   f.effort.value = cur.effort;
+  $('#rootRow').hidden = tab !== 'main';
+  $('#rootPath').textContent = state.root || 'Not set';
   $('#settingsTitle').textContent = `${tab === 'main' ? 'Main' : projectName(tab)} settings`;
   settingsDlg.showModal();
 });
@@ -473,6 +475,46 @@ $('#settingsForm').addEventListener('submit', guard(async (e) => {
   await api('POST', `/api/settings/${tab}`, { model: f.model.value, effort: f.effort.value });
   settingsDlg.close();
   toast('Saved. Applies from the next message.');
+}));
+
+// ---------- projects folder picker ----------
+// On first start (no folder yet) it can't be dismissed. Later it opens from
+// Main's settings, starting at the current folder.
+
+const folderDlg = $('#folderDlg');
+let folderAt = null;
+
+async function browse(p) {
+  const r = await api('GET', `/api/folders${p ? `?path=${encodeURIComponent(p)}` : ''}`);
+  folderAt = r.path;
+  $('#folderPath').textContent = r.display;
+  const row = (path, label, cls = '') => `<button type="button" class="prow${cls}" data-path="${esc(path)}"><span class="pname">${esc(label)}</span></button>`;
+  $('#folderList').innerHTML = (r.parent ? row(r.parent, 'Up', ' up') : '')
+    + r.dirs.map((d) => row(d.path, d.name)).join('')
+    + (r.dirs.length ? '' : '<p class="empty">No folders inside</p>');
+  $('#folderList').scrollTop = 0;
+}
+
+async function openFolderPicker(required) {
+  folderDlg.dataset.required = required ? '1' : '';
+  $('#folderClose').hidden = required;
+  await browse(required ? '' : state.root || '');
+  if (!folderDlg.open) folderDlg.showModal();
+}
+folderDlg.addEventListener('cancel', (e) => { if (folderDlg.dataset.required) e.preventDefault(); });
+$('#folderList').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('[data-path]');
+  if (b) await browse(b.dataset.path);
+}));
+$('#folderUse').addEventListener('click', guard(async () => {
+  const r = await api('POST', '/api/root', { path: folderAt });
+  folderDlg.dataset.required = '';
+  folderDlg.close();
+  toast(`Projects folder: ${r.root}`);
+}));
+$('#rootChange').addEventListener('click', guard(async () => {
+  settingsDlg.close();
+  await openFolderPicker(false);
 }));
 
 // ---------- chat pane: collapse + drag to resize (desktop) ----------
@@ -699,7 +741,7 @@ function setComposerBusy(form, busy) {
 }
 
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
-document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
+document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d && !d.dataset.required) d.close(); }));
 
 let first = true;
 function connect() {
@@ -710,7 +752,12 @@ function connect() {
     const msg = JSON.parse(e.data);
     if (msg.type === 'state') {
       state = msg.state;
-      if (first) { first = false; selectTab(tab); return; }
+      if (first) {
+        first = false;
+        selectTab(tab);
+        if (!state.root) openFolderPicker(true).catch((err) => toast(err.message));
+        return;
+      }
       renderTabs();
       renderBoard();
       renderChatControls();

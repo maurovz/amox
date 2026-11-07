@@ -3,19 +3,30 @@
 // project folder, plus a lead agent you chat with. No dependencies.
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-try { process.loadEnvFile(path.join(ROOT, '.env')); } catch {}
+const IS_WIN = process.platform === 'win32';
+const home = (p) => p.replace(/^~(?=[\\/]|$)/, os.homedir());
+
+// Where Amox keeps its own state: .env, projects.json, data/. A clone that
+// already keeps them in the repo goes on doing so; new installs (npx, fresh
+// clones) use ~/.amox, so updating Amox never touches them. AMOX_HOME overrides.
+const LEGACY = !process.env.AMOX_HOME && ['data', 'projects.json', '.env'].some((f) => fs.existsSync(path.join(ROOT, f)));
+const STATE_DIR = process.env.AMOX_HOME ? path.resolve(home(process.env.AMOX_HOME))
+  : LEGACY ? ROOT : path.join(os.homedir(), '.amox');
+fs.mkdirSync(STATE_DIR, { recursive: true });
+try { process.loadEnvFile(path.join(STATE_DIR, '.env')); } catch {}
 
 const PORT = Number(process.env.PORT) || 4700;
 const HOST = process.env.HOST || '127.0.0.1';
 const TOKEN = process.env.AMOX_TOKEN || process.env.BOARD_TOKEN || ''; // BOARD_TOKEN: pre-rename name
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
-const DATA_DIR = path.resolve(ROOT, process.env.DATA_DIR || 'data');
+const DATA_DIR = path.resolve(STATE_DIR, process.env.DATA_DIR || 'data');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
 const DB_FILE = path.join(DATA_DIR, 'board.json');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -32,8 +43,12 @@ const DEFAULT_MODEL = 'opus';
 const DEFAULT_EFFORT = 'high';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
-  console.error(`Refusing to listen on ${HOST} without AMOX_TOKEN. Set it in .env.`);
+  console.error(`Refusing to listen on ${HOST} without AMOX_TOKEN. Set it in ${path.join(STATE_DIR, '.env')}.`);
   process.exit(1);
+}
+
+try { execFileSync(CLAUDE_BIN, ['--version'], { stdio: 'ignore', timeout: 20000, windowsHide: true }); } catch {
+  console.warn(`[amox] Can't run "${CLAUDE_BIN}". Install Claude Code (https://claude.com/claude-code) and log in, or set CLAUDE_BIN.`);
 }
 
 const now = () => new Date().toISOString();
@@ -48,9 +63,8 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 // extra projects outside the root, folders to ignore. It's re-read on every
 // rescan, so edits apply without a restart.
 
-const PROJECTS_FILE = path.resolve(ROOT, process.env.PROJECTS_FILE || 'projects.json');
+const PROJECTS_FILE = path.resolve(STATE_DIR, process.env.PROJECTS_FILE || 'projects.json');
 const ARCHIVE_DIR = 'archive';
-const home = (p) => p.replace(/^~(?=\/|$)/, process.env.HOME);
 const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
 const projectDefaults = () => ({
   // Default: skip permissions (like --dangerously-skip-permissions). Nobody
@@ -76,10 +90,13 @@ function saveConfigFile(raw) {
 }
 
 function buildConfig(raw) {
-  // Main runs in the root folder that holds all projects (by default the
-  // parent of this repo), so it sees every project, including Amox itself.
+  // Main runs in the root folder that holds all projects, so it sees every
+  // project. The user picks it in the UI on first start (saved as lead.cwd).
+  // Older installs kept Amox inside that folder, so for them the default is
+  // the repo's parent.
+  const root = raw.lead?.cwd || (LEGACY ? path.dirname(ROOT) : null);
   const lead = {
-    cwd: path.resolve(home(raw.lead?.cwd || path.dirname(ROOT))),
+    cwd: root && path.resolve(home(root)),
     addDirs: (raw.lead?.addDirs || []).map(home),
     permissionMode: raw.lead?.permissionMode || DEFAULT_PERMISSION_MODE,
     model: raw.lead?.model || DEFAULT_MODEL,
@@ -94,7 +111,8 @@ function buildConfig(raw) {
   }
 
   const found = [];
-  for (const [dir, archived] of [[lead.cwd, false], [path.join(lead.cwd, ARCHIVE_DIR), true]]) {
+  const roots = lead.cwd ? [[lead.cwd, false], [path.join(lead.cwd, ARCHIVE_DIR), true]] : [];
+  for (const [dir, archived] of roots) {
     let entries = [];
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch {}
     for (const e of entries) {
@@ -143,10 +161,13 @@ const projectById = (id) => config.projects.find((p) => p.id === id);
 // Claude Code's memory/sessions folders for that path along with it, and
 // the project keeps its id (matched by folder name). Unarchive moves it all back.
 
-const CLAUDE_PROJECTS = path.join(process.env.HOME, '.claude', 'projects');
+const CLAUDE_PROJECTS = path.join(os.homedir(), '.claude', 'projects');
 const isArchivedPath = (dir) => path.basename(path.dirname(dir)) === ARCHIVE_DIR;
 const encodeDir = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
-const tilde = (dir) => (dir.startsWith(process.env.HOME + '/') ? '~' + dir.slice(process.env.HOME.length) : dir);
+const tilde = (dir) => {
+  const h = os.homedir();
+  return dir === h ? '~' : dir.startsWith(h + path.sep) ? '~' + dir.slice(h.length) : dir;
+};
 
 function moveClaudeDirs(from, to) {
   let entries;
@@ -255,6 +276,7 @@ function broadcast(msg) {
 function publicState() {
   return {
     statuses: STATUSES,
+    root: config.lead.cwd ? tilde(config.lead.cwd) : null, // null: not picked yet, the UI asks
     projects: config.projects.map(({ id, name, path: dir }) => ({ id, name: name || id, archived: isArchivedPath(dir) })),
     cards: db.cards.map(({ baseline, ...c }) => ({ ...c, canRevert: !!baseline?.repos?.length })),
     chats: Object.fromEntries(['main', ...config.projects.map((p) => p.id)].map((key) => {
@@ -294,6 +316,11 @@ function rescan() {
   }
   if (JSON.stringify(next) === JSON.stringify(config)) return;
   config = next;
+  // Main's session belongs to its folder: a new projects folder starts fresh.
+  if (db.lead.cwd !== config.lead.cwd) {
+    db.lead.sessionId = null;
+    db.lead.cwd = config.lead.cwd;
+  }
   for (const p of config.projects) db.chats[p.id] ||= { id: `chat-${p.id}`, sessionId: null, run: null, lastRun: null };
   changed();
 }
@@ -463,8 +490,10 @@ function baseArgs({ permissionMode, model, effort }) {
 // project agents (cards and project chats) can't read or change it. Deny
 // rules apply even when permissions are skipped. Bash honors them for plain
 // file commands (cat, head); with the project's sandbox on, for everything.
-const BOARD_FILES = [path.join(DATA_DIR, '**'), PROJECTS_FILE, path.join(ROOT, '.env')];
-const BOARD_DENY = ['Read', 'Edit', 'Write'].flatMap((tool) => BOARD_FILES.map((f) => `${tool}(/${f})`));
+const BOARD_FILES = [path.join(DATA_DIR, '**'), PROJECTS_FILE, path.join(STATE_DIR, '.env'), path.join(ROOT, '.env')];
+// Rules take absolute paths as //path; on Windows in POSIX form (C:\x -> //c/x).
+const rulePath = (f) => (IS_WIN ? `//${f[0].toLowerCase()}${f.slice(2).replaceAll('\\', '/')}` : `/${f}`);
+const BOARD_DENY = ['Read', 'Edit', 'Write'].flatMap((tool) => [...new Set(BOARD_FILES)].map((f) => `${tool}(${rulePath(f)})`));
 
 // A project session: runs in the project folder with that project's rules.
 // extra: { env, allowedTools, unsandboxed } added on top (project chats use
@@ -526,6 +555,11 @@ function runChat(key, text, { notice } = {}) {
     });
   }
   const { cwd } = config.lead;
+  if (!cwd) {
+    chat.run = null;
+    appendLog(chat.id, { kind: 'error', text: 'Pick your projects folder first (⚙ on the Main tab).' });
+    return changed();
+  }
   const cli = path.relative(cwd, CLI);
   const brief = fs.readFileSync(LEAD_BRIEF, 'utf8').replaceAll('{{CLI}}', cli);
   const tools = [`Bash(node ${CLI}:*)`, `Bash(node ${cli}:*)`, 'Read', 'Glob', 'Grep', 'Edit', 'Write'];
@@ -542,7 +576,8 @@ function launch(entity, cwd, args, prompt, env) {
   delete env.ANTHROPIC_AUTH_TOKEN;
   let child;
   try {
-    child = spawn(CLAUDE_BIN, args, { cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    // detached: its own process group, so Stop can end the whole tree (Unix).
+    child = spawn(CLAUDE_BIN, args, { cwd, env, detached: !IS_WIN, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   } catch (err) {
     return finish(entity, { state: 'failed', error: err.message });
   }
@@ -650,9 +685,18 @@ function stop(entity) {
   const child = procs.get(entity.id);
   if (!child) return;
   entity.run.stopping = true;
-  const kill = (sig) => { try { process.kill(-child.pid, sig); } catch { try { child.kill(sig); } catch {} } };
-  kill('SIGTERM');
-  setTimeout(() => { if (procs.get(entity.id) === child) kill('SIGKILL'); }, 5000).unref();
+  killTree(child, 'SIGTERM');
+  setTimeout(() => { if (procs.get(entity.id) === child) killTree(child, 'SIGKILL'); }, 5000).unref();
+}
+
+// Ends an agent and everything it started: its process group on Unix,
+// taskkill /T on Windows (no process groups there).
+function killTree(child, sig) {
+  if (IS_WIN) {
+    try { execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch {}
+    return;
+  }
+  try { process.kill(-child.pid, sig); } catch { try { child.kill(sig); } catch {} }
 }
 
 // stream-json message -> transcript events the UI shows.
@@ -952,6 +996,31 @@ async function handle(req, res) {
     return send(res, 200, { ok: true });
   }
 
+  // Projects folder picker. A web page can't get a real path from the OS
+  // folder dialog, so the server lists folders and the page browses them.
+  if (p === '/api/folders' && m === 'GET') {
+    const dir = path.resolve(home(url.searchParams.get('path') || os.homedir()));
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (err) {
+      throw httpError(400, `Can't open ${tilde(dir)} (${err.code || err.message})`);
+    }
+    const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => e.name).sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, path: path.join(dir, name) }));
+    const parent = path.dirname(dir);
+    return send(res, 200, { path: dir, display: tilde(dir), parent: parent === dir ? null : parent, dirs });
+  }
+
+  if (p === '/api/root' && m === 'POST') {
+    const b = await readBody(req);
+    const dir = b.path && path.resolve(home(String(b.path)));
+    if (!dir || !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) throw httpError(400, 'Not a folder');
+    if (db.lead.run) throw httpError(409, 'Main is busy. Stop it first.');
+    saveConfigFile({ ...readConfigFile(), lead: { ...readConfigFile().lead, cwd: tilde(dir) } });
+    rescan();
+    return send(res, 200, { root: tilde(dir) });
+  }
+
   if (p === '/api/projects/refresh' && m === 'POST') {
     rescan();
     return send(res, 200, { projects: publicState().projects });
@@ -1003,7 +1072,7 @@ const server = http.createServer((req, res) => {
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
-    for (const child of procs.values()) { try { process.kill(-child.pid, 'SIGTERM'); } catch {} }
+    for (const child of procs.values()) killTree(child, 'SIGTERM');
     save();
     process.exit(0);
   });
