@@ -228,9 +228,9 @@ function renderTabs() {
   const anyBusy = keys.some((k) => state.chats[k]?.busy);
   $('#chatExpand .dot').className = `dot ${anyBusy ? 'busy' : unread.size ? 'unread' : ''}`;
   const tabBtn = (k, extra = '') => {
-    const dot = state.chats[k]?.busy ? 'busy' : unread.has(k) ? 'unread' : '';
+    const a = activity(k);
     const movable = k !== 'main' && !extra ? ' movable' : '';
-    return `<button class="tab${k === tab ? ' on' : ''}${extra}${movable}" data-tab="${esc(k)}">${esc(tabName(k))}<span class="dot ${dot}"></span></button>`;
+    return `<button class="tab${k === tab ? ' on' : ''}${extra}${movable}" data-tab="${esc(k)}" title="${esc(a.summary)}">${esc(tabName(k))}<span class="dot ${a.dot}"></span></button>`;
   };
   const active = ['main', ...state.projects.filter((p) => !p.archived).map((p) => p.id)];
   const archived = state.projects.filter((p) => p.archived).map((p) => p.id);
@@ -244,7 +244,72 @@ function renderTabs() {
     if (open) html += archived.map((k) => tabBtn(k, ' archived')).join('');
   }
   $('#tabs').innerHTML = html;
+  updateTabFade();
+  if (projectsDlg.open) renderProjects();
 }
+
+// What a tab is doing. The dot: busy (its chat or one of its cards is
+// running), unread (a reply you haven't seen), attn (cards in Review or
+// failed). Main's dot only follows Main's chat; its summary covers the board.
+function activity(k) {
+  const main = k === 'main';
+  const cards = state.cards.filter((c) => (main ? !isArchived(c.project) : c.project === k));
+  const n = (f) => cards.filter(f).length;
+  const running = n((c) => c.run?.state === 'running');
+  const queued = n((c) => c.run?.state === 'queued');
+  const review = n((c) => c.status === 'review' && !c.run);
+  const failed = n((c) => c.status === 'ready' && !c.run && ['failed', 'interrupted'].includes(c.lastRun?.state));
+  const open = n((c) => ['backlog', 'ready'].includes(c.status) && !c.run) - failed;
+  const chatBusy = !!state.chats[k]?.busy;
+  const parts = [];
+  if (chatBusy) parts.push(main ? 'Working' : 'Chat working');
+  if (running) parts.push(`${running} running`);
+  if (queued) parts.push(`${queued} queued`);
+  if (review) parts.push(`${review} to review`);
+  if (failed) parts.push(`${failed} failed`);
+  if (open) parts.push(`${open} open`);
+  const dot = chatBusy || (!main && running) ? 'busy'
+    : unread.has(k) ? 'unread'
+    : !main && (review || failed) ? 'attn' : '';
+  return { dot, summary: parts.join(' · ') || 'Nothing open' };
+}
+
+// ---------- tab strip overflow: edge fade and the ▾ list of all projects ----------
+
+function updateTabFade() {
+  const s = $('#tabs');
+  s.classList.toggle('fade-l', s.scrollLeft > 2);
+  s.classList.toggle('fade-r', s.scrollLeft + s.clientWidth < s.scrollWidth - 2);
+}
+$('#tabs').addEventListener('scroll', updateTabFade, { passive: true });
+new ResizeObserver(updateTabFade).observe($('#tabs'));
+
+const projectsDlg = $('#projectsDlg');
+function renderProjects() {
+  const row = (k, extra = '') => {
+    const a = activity(k);
+    return `<button class="prow${k === tab ? ' on' : ''}${extra}" data-tab="${esc(k)}"><span class="dot ${a.dot}"></span>`
+      + `<span class="pname">${esc(tabName(k))}</span><span class="muted small">${esc(a.summary)}</span></button>`;
+  };
+  const active = ['main', ...state.projects.filter((p) => !p.archived).map((p) => p.id)];
+  const archived = state.projects.filter((p) => p.archived).map((p) => p.id);
+  projectsDlg.innerHTML = active.map((k) => row(k)).join('')
+    + (archived.length ? `<p class="muted small phead">Archived</p>${archived.map((k) => row(k, ' archived')).join('')}` : '');
+}
+$('#tabsAll').addEventListener('click', () => {
+  renderProjects();
+  projectsDlg.showModal();
+  const r = $('#tabsAll').getBoundingClientRect();
+  projectsDlg.style.top = `${r.bottom + 4}px`;
+  projectsDlg.style.right = `${Math.max(8, innerWidth - r.right)}px`;
+  projectsDlg.querySelector('.prow.on')?.focus();
+});
+projectsDlg.addEventListener('click', (e) => {
+  const row = e.target.closest('.prow');
+  if (!row) return; // backdrop clicks are handled by the shared dialog handler
+  projectsDlg.close();
+  if (row.dataset.tab !== tab) selectTab(row.dataset.tab);
+});
 
 function renderChatControls() {
   const busy = !!state.chats[tab]?.busy;

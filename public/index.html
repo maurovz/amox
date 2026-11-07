@@ -30,7 +30,10 @@
     <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize chat" tabindex="0" title="Drag to resize, double click to reset"></div>
 
     <aside class="chat">
-      <nav id="tabs" class="tabs" aria-label="Chats"></nav>
+      <div class="tabbar">
+        <nav id="tabs" class="tabs" aria-label="Chats"></nav>
+        <button id="tabsAll" class="icon" aria-label="All projects" title="All projects"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
       <div class="chat-head">
         <span id="chatHint" class="muted small"></span>
         <span class="grow"></span>
@@ -112,6 +115,9 @@
       <button class="btn primary">Save</button>
     </form>
   </dialog>
+
+  <!-- All projects, with what each is doing -->
+  <dialog id="projectsDlg" class="menu" aria-label="All projects"></dialog>
 
   <div id="toast" class="toast" hidden></div>
   <script src="/app.js" type="module"></script>

@@ -118,9 +118,12 @@ body.resizing .splitter { pointer-events: auto; }
   font-weight: 600;
 }
 .rail:hover { color: var(--text); }
-.rail .dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; }
-.rail .dot.busy { background: var(--ok); animation: pulse 1.2s infinite; }
-.rail .dot.unread { background: var(--accent); }
+/* Activity dot: busy = a chat or card agent is working, unread = a reply you
+   haven't seen, attn = cards waiting in Review or failed. */
+.dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
+.dot.busy { background: var(--ok); animation: pulse 1.2s infinite; }
+.dot.unread { background: var(--accent); }
+.dot.attn { background: var(--warn); }
 
 body[data-chat="collapsed"] .layout { grid-template-columns: minmax(0, 1fr) 40px; }
 body[data-chat="collapsed"] .chat,
@@ -133,14 +136,23 @@ body[data-chat="collapsed"] .rail { display: flex; }
   display: flex; flex-direction: column;
   background: var(--panel);
 }
+.tabbar { flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
 .tabs {
-  flex: none;
+  flex: 1; min-width: 0;
   display: flex; gap: 2px;
   overflow-x: auto;
   padding: 6px 8px 0;
-  border-bottom: 1px solid var(--border);
   scrollbar-width: none;
 }
+/* Fade the edge that has more tabs behind it, so the strip reads as scrollable. */
+.tabs.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), rgb(0 0 0 / 0.25)); mask-image: linear-gradient(to right, #000 calc(100% - 32px), rgb(0 0 0 / 0.25)); }
+.tabs.fade-l { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), rgb(0 0 0 / 0.25)); mask-image: linear-gradient(to left, #000 calc(100% - 32px), rgb(0 0 0 / 0.25)); }
+.tabs.fade-l.fade-r {
+  -webkit-mask-image: linear-gradient(to right, rgb(0 0 0 / 0.25), #000 32px, #000 calc(100% - 32px), rgb(0 0 0 / 0.25));
+  mask-image: linear-gradient(to right, rgb(0 0 0 / 0.25), #000 32px, #000 calc(100% - 32px), rgb(0 0 0 / 0.25));
+}
+#tabsAll { flex: none; min-width: 44px; padding: 6px 12px 0; display: inline-flex; align-items: center; justify-content: center; }
+#tabsAll:hover { color: var(--text); }
 .tabs::-webkit-scrollbar { display: none; }
 .tab {
   flex: none;
@@ -155,13 +167,29 @@ body[data-chat="collapsed"] .rail { display: flex; }
 .tab { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .tab.dragging { background: var(--code); border-radius: 8px 8px 0 0; color: var(--text); opacity: 0.9; cursor: grabbing; }
 body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
-.tab .dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; }
-.tab .dot.busy { background: var(--ok); animation: pulse 1.2s infinite; }
-.tab .dot.unread { background: var(--accent); }
 .tab.folder { color: var(--muted); }
 .tab.folder .n { font-size: 11px; padding: 0 6px; border-radius: 99px; background: var(--code); }
 .tab.archived { font-style: italic; opacity: 0.75; }
 .tab.archived.on { opacity: 1; }
+/* All-projects list, dropped down from the ▾ at the end of the tabs. */
+dialog.menu {
+  margin: 0; inset: auto; padding: 6px;
+  width: min(340px, calc(100vw - 16px)); max-height: 70dvh; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel); color: var(--text);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+dialog.menu::backdrop { background: transparent; }
+.prow {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text);
+  padding: 6px 10px; text-align: left; cursor: pointer; font: inherit;
+}
+.prow:hover, .prow.on { background: var(--code); }
+.prow .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow .muted { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow.archived .pname { font-style: italic; }
+.phead { margin: 8px 10px 4px; }
 .tabs .sep { flex: none; width: 1px; margin: 8px 4px; background: var(--border); }
 .chat-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 12px; min-height: 42px; }
 .chat .log { padding: 10px 12px; }

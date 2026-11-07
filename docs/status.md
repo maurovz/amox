@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-04. Project tabs can manage their own project's cards.
+As of 2026-11-07. Tabs show what each project is doing, and a list at the end of the tabs shows every project.
 
 ## Works
 
@@ -10,13 +10,14 @@ As of 2026-11-04. Project tabs can manage their own project's cards.
 - Project tabs manage their own project's cards through `cli.js` with a per-project token (refused for anything else). Project agents can't read Amox's `data/`, `projects.json`, `.env`.
 - Agents (cards, project chats, Main) skip permissions by default. Deny rules and hooks still apply. Per project, `acceptEdits` plus `sandbox` locks one down.
 - Projects are discovered from the root folder (↻ picks up new folders); `projects.json` only overrides.
+- Tab dots show activity per project (chat or card running, unread, cards in Review or failed). The ⌄ after the tabs lists all projects with a short summary; the strip fades where more tabs are hidden.
 - Review: Approve, Reject (git revert, back to Ready), Redo (revert and rerun). Tested on a scratch repo: exact restore, refuses after a push.
 - Archive / unarchive a project (moves its folder and its Claude Code memory).
 - Token auth (cookie after `?token=` once), so it can be exposed.
 
 ## Tested
 
-Only locally, against a throwaway project: task run, resume, sandbox blocking writes outside the folder, Main creating cards, a project chat loading its own `CLAUDE.md`, skipped permissions with a deny rule still blocking. Project tab card access (2026-11-04), with and without sandbox: own cards work, other projects' cards, refresh and moving a card to another project are refused, reading `data/board.json` is denied. The UI has not been checked in a browser by an agent.
+Only locally, against a throwaway project: task run, resume, sandbox blocking writes outside the folder, Main creating cards, a project chat loading its own `CLAUDE.md`, skipped permissions with a deny rule still blocking. Project tab card access (2026-11-04), with and without sandbox: own cards work, other projects' cards, refresh and moving a card to another project are refused, reading `data/board.json` is denied. The tab dots, ⌄ project list and edge fade were checked in headless Chrome at 390px and 1200px on a scratch instance (2026-11-07), without a running card. The rest of the UI has not been checked in a browser by an agent.
 
 ## Open
 

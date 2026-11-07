@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-07. Project overview lives in the tab strip, not a new view
+
+The user wanted to see at a glance which projects are active, without bloating the product. Trello doesn't have a cross-board status view in the base product either: boards are listed, and closing a board is how you mark it inactive (Amox's Archive does that). So no dashboard. Each tab's dot now also lights up for a running card (before, only for the chat) and turns amber for cards in Review or failed. It was also unclear that the tabs scroll. The usual fix (Chrome, VS Code, Material tabs) is an edge fade plus an overflow button that lists every tab. That list also gives each project a one-line summary, so it doubles as the overview.
+
 ## 2026-11-04. Project tabs manage their own cards, with a scoped token
 
 From a project tab the user couldn't touch the board. Running project tabs from the root folder instead was rejected: they'd lose the project's `CLAUDE.md`, settings and git context. And adding a config file to each repo was out, since some repos are strict about what gets committed. Now a project tab stays in its folder and gets `cli.js` plus a token made for that project, fresh on every server start. The server only lets that token reach the project's own cards (a header could be faked, a token can't). Main keeps the master token and sees everything. Project agents are denied Amox's `data/`, `projects.json` and `.env` through `--settings` deny rules, so they can't read other projects' cards or the master token from disk. In sandboxed projects `cli.js` runs outside the sandbox, which blocks localhost. A chained command stays fully sandboxed. This only holds with `AMOX_TOKEN` set. It's a guard against agents wandering, not a wall: an unsandboxed agent running as the same user could still dig the token out another way.
