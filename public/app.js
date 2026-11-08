@@ -505,9 +505,11 @@ async function browse(p) {
 }
 
 async function openFolderPicker(required) {
+  $('#folderMissing').hidden = !state.missing;
+  $('#folderMissing').textContent = state.missing ? `${state.missing} was moved or deleted. Put it back, or pick another folder.` : '';
   folderDlg.dataset.required = required ? '1' : '';
   $('#folderClose').hidden = required;
-  await browse(required ? '' : state.root || '');
+  await browse(state.root && !state.missing ? state.root : '');
   if (!folderDlg.open) folderDlg.showModal();
 }
 folderDlg.addEventListener('cancel', (e) => { if (folderDlg.dataset.required) e.preventDefault(); });
@@ -771,9 +773,10 @@ function connect() {
       if (first) {
         first = false;
         selectTab(tab);
-        if (!state.root) openFolderPicker(true).catch((err) => toast(err.message));
+        if (!state.root || state.missing) openFolderPicker(true).catch((err) => toast(err.message));
         return;
       }
+      if (state.missing && !folderDlg.open) openFolderPicker(true).catch((err) => toast(err.message));
       renderTabs();
       renderBoard();
       renderChatControls();

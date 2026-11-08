@@ -249,8 +249,22 @@ function backup() {
   } catch (err) { console.warn(`[amox] backup: ${err.message}`); }
 }
 
+const isDir = (d) => !!d && !!fs.statSync(d, { throwIfNoEntry: false })?.isDirectory();
+
+// The open projects folder was moved or deleted while Amox runs. Saving would
+// fail (or recreate it), so changes stay in memory and the UI asks for a
+// folder (see publicState's missing).
+let missingWarned = false;
+function folderMissing() {
+  if (isDir(config.lead.cwd)) { missingWarned = false; return false; }
+  if (!missingWarned) console.warn(`[amox] ${tilde(config.lead.cwd)} is gone; not saving until a folder is picked`);
+  missingWarned = true;
+  return true;
+}
+
 function save() {
   if (!DB_FILE) return; // no projects folder picked yet
+  if (folderMissing()) return;
   backup();
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
@@ -298,6 +312,7 @@ let folders = readFolders();
 // Everything is read before anything is swapped, so a broken projects.json
 // leaves the open folder as it was.
 function openFolder(root) {
+  if (!isDir(root)) throw new Error(`${tilde(root)} doesn't exist`);
   const dir = path.join(root, BOARD_DIR_NAME);
   const files = { projects: path.join(dir, 'projects.json'), db: path.join(dir, 'board.json') };
   const cfg = buildConfig(readConfigFile(files.projects), root);
@@ -376,6 +391,9 @@ function publicState() {
   return {
     statuses: STATUSES,
     root: config.lead.cwd ? tilde(config.lead.cwd) : null, // null: not picked yet, the UI asks
+    // The open folder (or the one from the last run) was moved or deleted.
+    missing: config.lead.cwd ? (isDir(config.lead.cwd) ? null : tilde(config.lead.cwd))
+      : folders?.current && !isDir(folders.current) ? tilde(folders.current) : null,
     recent: (folders?.recent || []).filter((d) => d !== config.lead.cwd && fs.existsSync(d)).map(tilde),
     projects: config.projects.map(({ id, name, path: dir }) => ({ id, name: name || id, archived: isArchivedPath(dir), color: db.colors?.[id] || COLORS[0] })),
     cards: db.cards.map(({ baseline, ...c }) => ({ ...c, canRevert: !!baseline?.repos?.length })),
@@ -1136,11 +1154,13 @@ async function handle(req, res) {
     if ([db.lead, ...Object.values(db.chats), ...db.cards].some((e) => e.run) || procs.size) {
       throw httpError(409, 'Stop running and queued agents first');
     }
-    if (dir !== config.lead.cwd) {
+    if (dir === config.lead.cwd && isDir(BOARD_DIR)) {
+      changed(); // the folder was put back: save what changed meanwhile
+    } else {
       try { openFolder(dir); } catch (err) { throw httpError(400, err.message); }
-      // Every open page reloads: tabs, cards and chats all change.
-      broadcast({ type: 'reload' });
     }
+    // Every open page reloads: tabs, cards and chats may all change.
+    broadcast({ type: 'reload' });
     return send(res, 200, { root: tilde(dir) });
   }
 
@@ -1193,7 +1213,11 @@ if (!folders) {
   folders = { current: root, recent: root ? [root] : [] };
   if (root) writeFolders(folders);
 }
-if (folders.current) {
+// A folder that's gone since the last run (deleted, moved, unmounted) isn't
+// recreated: the UI asks for one instead.
+if (folders.current && !isDir(folders.current)) {
+  console.warn(`[amox] ${tilde(folders.current)} is gone; pick a projects folder in the UI`);
+} else if (folders.current) {
   try { openFolder(folders.current); } catch (err) {
     console.error(`[amox] can't open ${tilde(folders.current)}: ${err.message}`);
     process.exit(1);

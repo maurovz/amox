@@ -45,7 +45,7 @@ Each projects folder has its own board, kept in a hidden `.amox` folder inside i
 - `<projects folder>/.amox/projects.json`: per-project overrides, tab order and Main's settings (see [Projects](#projects)).
 - `<projects folder>/.amox/backups/`: a copy of `board.json` per day, last 7 days. To undo a mistake, stop Amox and copy one back over `board.json`.
 
-`.amox` has its own `.gitignore`, so it's never committed if the projects folder is a repo.
+`.amox` has its own `.gitignore`, so it's never committed if the projects folder is a repo. If the open folder is moved or deleted, Amox stops saving and asks you to put it back or pick another; it never recreates it.
 
 The server's own settings live in `~/.amox`, outside the repo, so updating Amox never touches them:
 
