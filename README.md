@@ -1,5 +1,7 @@
 # Amox
 
+<a href="docs/media/demo.mp4"><img src="docs/media/demo.webp" alt="Amox demo: dragging a card to In progress, the agent running, and Main summarizing the board" width="100%"></a>
+
 A kanban board for all your projects, where cards run [Claude Code](https://claude.com/claude-code) agents. The name is from Nahuatl *amoxtli*, the codex where the Mexica kept their records.
 
 Every folder in your projects folder becomes a project. Move a card to **In progress** and Amox runs Claude Code inside that project's folder; when it's done the card lands in **Review**, where you approve it or revert it with one tap. A chat pane next to the board has a **Main** agent that sees every project and turns ideas into cards, plus a tab per project that works like a terminal in that folder. It works from the laptop and the phone.
