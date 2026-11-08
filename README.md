@@ -50,7 +50,7 @@ Amox keeps its own state in `~/.amox`: `.env`, `projects.json` and `data/` (set 
 - `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
 - `allowedTools`: extra rules, e.g. `["Bash(npm install:*)"]`.
 
-Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows as "Not allowed: …".
+Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows in the transcript as a failed tool call.
 
 Skipping permissions means agents can do anything your user can on this machine. Run Amox somewhere isolated before giving it anything you can't lose.
 

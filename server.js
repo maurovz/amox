@@ -712,10 +712,9 @@ function simplify(msg) {
     for (const b of msg.message.content) {
       if (b.type === 'tool_result' && b.is_error) out.push({ kind: 'tool_error', text: clip(contentText(b.content), 400) });
     }
-  } else if (msg.type === 'result') {
-    const denied = (msg.permission_denials || []).map((d) => `${d.tool_name} ${toolSummary(d.tool_input)}`.trim());
-    if (denied.length) out.push({ kind: 'tool_error', text: `Not allowed: ${[...new Set(denied)].join(' | ')}` });
   }
+  // The result's permission_denials only repeat the denials already shown
+  // inline as tool errors, so they aren't shown again.
   return out;
 }
 
