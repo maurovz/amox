@@ -29,4 +29,4 @@ Only locally, against a throwaway project: task run, resume, sandbox blocking wr
 - Project KBs that live outside their repo (`knowledge/projects/<slug>/`, for client and open source repos) aren't passed to agents yet.
 - A project chat and a running card in the same folder don't wait for each other.
 - No tests.
-- Open source: still to do. Pick a license, publish to npm, make `lead/brief.md` work without the user's `knowledge/` folder, safer default than skipping permissions for new users, README for strangers (screenshot, quickstart first).
+- Open source: still to do. Pick a license, publish to npm, make `lead/brief.md` work without the user's `knowledge/` folder, safer default than skipping permissions for new users, a screenshot in the README (it now leads with requirements, quick start and first run).

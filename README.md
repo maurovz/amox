@@ -1,10 +1,21 @@
 # Amox
 
-A kanban board for all projects. The name is from Nahuatl *amoxtli*, the codex where the Mexica kept their records. Cards run Claude Code task agents, and a lead agent you chat with turns ideas into cards. No dependencies, just Node 22+ and the `claude` CLI logged in.
+A kanban board for all your projects, where cards run [Claude Code](https://claude.com/claude-code) agents. The name is from Nahuatl *amoxtli*, the codex where the Mexica kept their records.
 
-## Run
+Every folder in your projects folder becomes a project. Move a card to **In progress** and Amox runs Claude Code inside that project's folder; when it's done the card lands in **Review**, where you approve it or revert it with one tap. A chat pane next to the board has a **Main** agent that sees every project and turns ideas into cards, plus a tab per project that works like a terminal in that folder. It works from the laptop and the phone.
 
-Needs Node 22+ and [Claude Code](https://claude.com/claude-code) installed and logged in (`claude` on your PATH, or set `CLAUDE_BIN`).
+No dependencies, no build step: just Node and the `claude` CLI.
+
+> **Heads up.** By default agents run with permissions skipped (like `claude --dangerously-skip-permissions`), so they can do anything your user can on this machine. Read [Permissions and safety](#permissions-and-safety) before pointing Amox at anything you can't lose.
+
+## Requirements
+
+- [Node.js](https://nodejs.org) 22 or newer.
+- [Claude Code](https://claude.com/claude-code) installed and logged in: run `claude` once in a terminal and sign in. It must be on your `PATH`, or set `CLAUDE_BIN` to its full path.
+- Git, for the Review buttons (Reject and Redo revert a card's changes with git).
+- A folder that holds your projects, one subfolder per project (for example `~/code`).
+
+## Quick start
 
 ```
 git clone https://github.com/maurovz/amox
@@ -12,11 +23,45 @@ cd amox
 npm start
 ```
 
-(`npx amox` once it's on npm.) Open http://127.0.0.1:4700. On first start Amox asks where your projects are: browse to the folder that holds them and pick **Use this folder**. Change it later from **⚙** on the Main tab.
+Open http://127.0.0.1:4700.
 
-Amox keeps its own state in `~/.amox`: `.env`, `projects.json` and `data/` (set `AMOX_HOME` to move it). A clone that already has them in the repo folder keeps using those.
+`npx amox` will do the same once it's published to npm.
 
-**Platforms.** macOS is what it's used on daily. Linux should work but is untested. Windows is experimental: use WSL, or run it natively with Claude Code's native installer (`claude.exe` on the PATH). The `sandbox` option doesn't work on native Windows.
+## First run
+
+1. Amox asks where your projects are. Browse to the folder that holds them and pick **Use this folder**. Each subfolder becomes a project tab. You can change it later from **⚙** on the Main tab.
+2. Pick a project tab and add a card with a title and what you want done.
+3. Move it to **In progress**. The agent's transcript streams into the card.
+4. When it finishes, the card moves to **Review**: **Approve** keeps the changes, **Reject** reverts them, **Redo** reverts and runs it again.
+
+To stop Amox, press Ctrl+C in its terminal. Running cards are marked **Interrupted** on the next start and can be resumed.
+
+## Where Amox keeps its state
+
+Everything Amox writes lives in `~/.amox`, outside the repo, so updating Amox never touches it:
+
+- `.env`: environment settings (see [Configuration](#configuration)).
+- `projects.json`: the projects folder and per-project overrides (see [Projects](#projects)).
+- `data/`: cards (`board.json`) and transcripts (`logs/`).
+
+Set `AMOX_HOME` to keep it somewhere else. A clone that already has these files in the repo folder keeps using those.
+
+## Configuration
+
+Set these in `~/.amox/.env` or in the environment:
+
+- `PORT`: default `4700`.
+- `HOST`: default `127.0.0.1`. Anything else (like `0.0.0.0`) requires `AMOX_TOKEN`; Amox refuses to start without it.
+- `AMOX_TOKEN`: a long random string. When set, every request needs it (see [Phone access](#phone-access)), and project agents only get access to their own project's cards. Generate one with `openssl rand -hex 32`.
+- `AMOX_HOME`: where Amox keeps its state, default `~/.amox`.
+- `DATA_DIR`, `PROJECTS_FILE`: override the data folder and the projects file, relative to `AMOX_HOME`.
+- `CLAUDE_BIN`: path to the `claude` executable, default `claude`.
+
+Model, effort and permissions per project are set from **⚙** in the chat pane or in `projects.json`.
+
+## Platforms
+
+macOS is what it's used on daily. Linux should work but is untested. Windows is experimental: use WSL, or run it natively with Claude Code's native installer (`claude.exe` on the `PATH`). The `sandbox` option doesn't work on native Windows.
 
 ## How it works
 
@@ -31,11 +76,11 @@ Amox keeps its own state in `~/.amox`: `.env`, `projects.json` and `data/` (set 
   - **Reject**: revert the card's changes, back to Ready with a fresh session.
   - **Redo**: revert, then run the card again from scratch.
 
-  Revert uses git. Before a card first runs, Amox records each repo in the project folder (the folder itself, or its direct subfolders for multi-repo folders): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
+  Revert uses git. Before a card first runs, Amox records each repo in the project folder (the folder itself, or its direct subfolders for folders that hold several repos): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
 - One running card per project at a time, since they share the working tree. Others wait as Queued.
 - **Project tabs manage their own cards.** Ask a project tab to list, add, edit, move, start or reply to cards and it uses `cli.js`, but only for that project: it gets its own token, and the server refuses its requests for other projects' cards, chats and settings. Main still manages everything. The limit only holds with `AMOX_TOKEN` set (without one, any local request gets full access). Project agents (tabs and cards) also can't read or change Amox's `data/`, `projects.json` or `.env`; with `sandbox` on, that holds for every Bash command too.
-- **Main** is a Claude session in the root projects folder (picked on first start, saved as `lead.cwd` in `projects.json`). It reads every project and the portfolio KB, and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
-- **Amox is a project too** (its own tab). Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
+- **Main** is a Claude session in the root projects folder (picked on first start, saved as `lead.cwd` in `projects.json`). It can read every project and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
+- **If you clone Amox inside your projects folder** it becomes a project too, with its own tab. Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
 
 ## Projects
 
@@ -43,16 +88,23 @@ Amox keeps its own state in `~/.amox`: `.env`, `projects.json` and `data/` (set 
 
 **Discovered, not listed.** Every folder in the projects folder (`lead.cwd`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up when you tap **↻** (top bar), no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
 
-`projects.json` (optional, not committed, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
+`projects.json` (optional, in `~/.amox`, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
 
 - `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
 - `model` and `effort`: default `opus` (the latest Opus) and `high`. Set them from **⚙** in the chat pane, per tab: Main's go under `lead`, a project's apply to its chat and its cards, from the next message on.
 - `sandbox`: default `false`. `true` runs Bash in the OS sandbox: writes only inside the project folder, network limited to allowed domains.
 - `allowedTools`: extra rules, e.g. `["Bash(npm install:*)"]`.
 
-Deny rules in a project's `.claude/settings.json` and your hooks still apply when permissions are skipped. In a project that isn't on `bypassPermissions`, anything that would need a prompt is denied and shows in the transcript as a failed tool call.
+## Permissions and safety
 
-Skipping permissions means agents can do anything your user can on this machine. Run Amox somewhere isolated before giving it anything you can't lose.
+Nobody is around to answer a permission prompt on a running card, so agents skip permissions by default. That means they can do anything your user can on this machine. Run Amox somewhere isolated (a VM, a spare machine, a container) before giving it anything you can't lose.
+
+To lock a project down, set in its `projects.json` entry:
+
+- `"permissionMode": "acceptEdits"`: agents can edit files, and anything that would need a prompt is denied and shows in the transcript as a failed tool call. Add what you trust to `allowedTools`.
+- `"sandbox": true`: Bash runs in the OS sandbox, writes only inside the project folder, network limited to allowed domains.
+
+Deny rules in a project's `.claude/settings.json` and your Claude Code hooks still apply when permissions are skipped. Project agents can't read or change Amox's own `.env`, `projects.json` or `data/`. Set `AMOX_TOKEN` even locally if you want project agents limited to their own project's cards.
 
 ## Phone access
 
@@ -63,15 +115,48 @@ AMOX_TOKEN=<long random string>
 HOST=0.0.0.0
 ```
 
-Easiest is [Tailscale](https://tailscale.com) on the Mac and the phone: open `http://<mac-name>:4700/?token=<token>` once, then "Add to Home Screen". The token is stored as a cookie.
+Easiest is [Tailscale](https://tailscale.com) on the computer and the phone: open `http://<computer-name>:4700/?token=<token>` once, then "Add to Home Screen". The token is stored as a cookie.
 
-## Hosting later
+## Running on a server
 
-Amox runs agents on the machine it lives on, so a server needs the repos cloned, Node, and `claude` logged in there. Point `projects.json` at those paths, set `AMOX_TOKEN`, and put it behind HTTPS (Coolify, Caddy, or `tailscale serve`). Env: `PORT`, `HOST`, `AMOX_TOKEN` (the old `BOARD_TOKEN` still works), `AMOX_HOME`, `DATA_DIR`, `PROJECTS_FILE`, `CLAUDE_BIN`.
+Amox runs agents on the machine it lives on, so a server needs the repos cloned there, Node, and `claude` logged in. Pick the projects folder on first start (or set `lead.cwd` in `projects.json`), set `AMOX_TOKEN` and `HOST`, and put it behind HTTPS (Caddy, Coolify, or `tailscale serve`). An isolated machine or VM is also the safest place to let agents skip permissions.
 
-## Files
+## Card CLI
 
-- `server.js`: API, agent runner, live updates (SSE).
-- `cli.js`: card commands, used by the lead and by you.
-- `public/`: the UI.
-- `~/.amox/data/` (or `data/` in older installs): cards and transcripts (`logs/<id>.jsonl`, raw stream in `<id>.raw.jsonl`).
+`cli.js` manages cards from a terminal. Main and the project tabs use it too. It talks to the running server and reads the same `.env`.
+
+```
+node cli.js projects
+node cli.js list --project my-app
+node cli.js add --project my-app --title "Add a dark mode" --status ready
+node cli.js move <id> in_progress
+node cli.js reply <id> "Also cover the settings page"
+```
+
+Run `node cli.js` for every command. Set `AMOX_URL` if the server isn't on `http://127.0.0.1:4700`.
+
+## Development
+
+```
+npm start                # run it
+node --check server.js   # quick syntax check; there are no tests yet
+```
+
+To try changes without touching your real board, run a second instance with its own state:
+
+```
+AMOX_HOME=/tmp/amox-dev PORT=4799 node server.js
+```
+
+Files:
+
+- `server.js`: HTTP API, agent runner (`claude -p --output-format stream-json`), live updates over SSE, token auth, archive.
+- `cli.js`: card commands.
+- `public/`: the UI, plain HTML, CSS and JS modules.
+- `lead/brief.md`: Main's instructions, passed as a system prompt.
+
+Keep it dependency-free, and make UI changes work at phone width with touch (no hover-only or drag-only interactions).
+
+## License
+
+Not chosen yet.
