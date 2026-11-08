@@ -1,6 +1,9 @@
 # Amox
 
-<a href="docs/media/demo.mp4"><img src="docs/media/demo.webp" alt="Amox demo: dragging a card to In progress, the agent running, and Main summarizing the board" width="100%"></a>
+<p>
+  <a href="docs/media/demo.mp4"><img src="docs/media/demo.webp" alt="Amox on the laptop: dragging a card to In progress, the agent running, and Main summarizing the board" width="72%"></a>
+  <a href="docs/media/demo-phone.mp4"><img src="docs/media/demo-phone.webp" alt="Amox on the phone: starting a card from the board, then asking Main what's being worked on" width="25%"></a>
+</p>
 
 A kanban board for all your projects, where cards run [Claude Code](https://claude.com/claude-code) agents. The name is from Nahuatl *amoxtli*, the codex where the Mexica kept their records.
 
