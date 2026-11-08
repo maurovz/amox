@@ -34,14 +34,14 @@ Open http://127.0.0.1:4700 and pick your projects folder.
 
 ## Phone
 
-Put this in `~/.amox/.env`:
+Set a token and listen on the network, then restart Amox:
 
 ```
-AMOX_TOKEN=<openssl rand -hex 32>
-HOST=0.0.0.0
+echo "AMOX_TOKEN=$(openssl rand -hex 32)" >> ~/.amox/.env
+echo "HOST=0.0.0.0" >> ~/.amox/.env
 ```
 
-With [Tailscale](https://tailscale.com) on both devices, open `http://<computer>:4700/?token=<token>` once on the phone and add it to the home screen.
+With [Tailscale](https://tailscale.com) on both devices, open `http://<computer>:4700/?token=<token>` once on the phone and add it to the home screen. To see the token again: `grep AMOX_TOKEN ~/.amox/.env`.
 
 ## Safety
 
