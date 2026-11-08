@@ -27,7 +27,6 @@ Only locally, against a throwaway project: task run, resume, sandbox blocking wr
 - Isolation: agents skip permissions on the user's own Mac for now. Plan is to move the board somewhere isolated.
 - Not hosted. Phone access planned through Tailscale first (see README).
 - Repo: github.com/maurovz/amox (private for now). On the owner's install the Amox project id stays `board` (set in `projects.json`) so existing cards stay attached.
-- Project KBs that live outside their repo (`knowledge/projects/<slug>/`, for client and open source repos) aren't passed to agents yet.
 - A project chat and a running card in the same folder don't wait for each other.
 - No tests.
-- Open source: still to do. Pick a license, publish to npm, make `lead/brief.md` work without the user's `knowledge/` folder, safer default than skipping permissions for new users, a screenshot in the README (it now leads with requirements, quick start and first run).
+- Open source: still to do. Pick a license, publish to npm, safer default than skipping permissions for new users, a screenshot in the README (it now leads with requirements, quick start and first run).
