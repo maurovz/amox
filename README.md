@@ -43,6 +43,13 @@ echo "HOST=0.0.0.0" >> ~/.amox/.env
 
 With [Tailscale](https://tailscale.com) on both devices, open `http://<computer>:4700/?token=<token>` once on the phone and add it to the home screen. To see the token again: `grep AMOX_TOKEN ~/.amox/.env`.
 
+To keep it reachable while you're away, stop the Mac from sleeping (macOS):
+
+```
+caffeinate -is npm start        # awake while Amox runs (-s only on power)
+sudo pmset -a disablesleep 1    # also with the lid closed; undo with 0
+```
+
 ## Safety
 
 Nobody is there to answer permission prompts, so agents skip them. Run Amox on a machine you're fine with them touching. To lock a project down, add it to `.amox/projects.json` in your projects folder:
