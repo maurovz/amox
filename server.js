@@ -13,22 +13,32 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const IS_WIN = process.platform === 'win32';
 const home = (p) => p.replace(/^~(?=[\\/]|$)/, os.homedir());
 
-// Where Amox keeps its own state: .env, projects.json, data/. A clone that
-// already keeps them in the repo goes on doing so; new installs (npx, fresh
-// clones) use ~/.amox, so updating Amox never touches them. AMOX_HOME overrides.
+// Two places hold Amox's state:
+// - STATE_DIR, for the server itself: .env (port, host, token) and
+//   folders.json (which projects folder is open, recent ones). ~/.amox, or
+//   the repo for clones that already kept .env there. AMOX_HOME overrides.
+// - <projects folder>/.amox, for the work: board.json, logs/, projects.json
+//   (project overrides, tab order, Main's settings), backups/. So each
+//   projects folder brings its own board, and switching folders swaps it.
 const LEGACY = !process.env.AMOX_HOME && ['data', 'projects.json', '.env'].some((f) => fs.existsSync(path.join(ROOT, f)));
 const STATE_DIR = process.env.AMOX_HOME ? path.resolve(home(process.env.AMOX_HOME))
   : LEGACY ? ROOT : path.join(os.homedir(), '.amox');
 fs.mkdirSync(STATE_DIR, { recursive: true });
 try { process.loadEnvFile(path.join(STATE_DIR, '.env')); } catch {}
+const FOLDERS_FILE = path.join(STATE_DIR, 'folders.json');
+const BOARD_DIR_NAME = '.amox';
+const BACKUP_DAYS = 7;
 
 const PORT = Number(process.env.PORT) || 4700;
 const HOST = process.env.HOST || '127.0.0.1';
 const TOKEN = process.env.AMOX_TOKEN || process.env.BOARD_TOKEN || ''; // BOARD_TOKEN: pre-rename name
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
-const DATA_DIR = path.resolve(STATE_DIR, process.env.DATA_DIR || 'data');
-const LOG_DIR = path.join(DATA_DIR, 'logs');
-const DB_FILE = path.join(DATA_DIR, 'board.json');
+// The open folder's board files. Set by openFolder; null until a projects
+// folder is picked.
+let BOARD_DIR = null;
+let LOG_DIR = null;
+let DB_FILE = null;
+let PROJECTS_FILE = null;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const LEAD_BRIEF = path.join(ROOT, 'lead', 'brief.md');
 const CLI = path.join(ROOT, 'cli.js');
@@ -58,12 +68,11 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 // ---------- config ----------
 
 // Projects are discovered: every folder in the root (Main's folder) is a
-// project, and folders in root/archive are archived projects. projects.json
-// only overrides: names, permissions, ids kept stable for existing cards,
-// extra projects outside the root, folders to ignore. It's re-read on every
-// rescan, so edits apply without a restart.
+// project, and folders in root/archive are archived projects. The root's
+// .amox/projects.json only overrides: names, permissions, ids kept stable for
+// existing cards, extra projects outside the root, folders to ignore. It's
+// re-read on every rescan, so edits apply without a restart.
 
-const PROJECTS_FILE = path.resolve(STATE_DIR, process.env.PROJECTS_FILE || 'projects.json');
 const ARCHIVE_DIR = 'archive';
 const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
 const projectDefaults = () => ({
@@ -77,26 +86,25 @@ const projectDefaults = () => ({
   allowedTools: [],
 });
 
-function readConfigFile() {
-  try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8')); } catch (err) {
+function readConfigFile(file = PROJECTS_FILE) {
+  if (!file) return {};
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) {
     if (err.code === 'ENOENT') return {};
-    throw new Error(`projects.json: ${err.message}`);
+    throw new Error(`${tilde(file)}: ${err.message}`);
   }
 }
 
 function saveConfigFile(raw) {
+  if (!PROJECTS_FILE) throw httpError(409, 'Pick your projects folder first');
   fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(raw, null, 2) + '\n');
   fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
 }
 
-function buildConfig(raw) {
+function buildConfig(raw, root) {
   // Main runs in the root folder that holds all projects, so it sees every
-  // project. The user picks it in the UI on first start (saved as lead.cwd).
-  // Older installs kept Amox inside that folder, so for them the default is
-  // the repo's parent.
-  const root = raw.lead?.cwd || (LEGACY ? path.dirname(ROOT) : null);
+  // project. The user picks it in the UI (saved in folders.json).
   const lead = {
-    cwd: root && path.resolve(home(root)),
+    cwd: root || null,
     addDirs: (raw.lead?.addDirs || []).map(home),
     permissionMode: raw.lead?.permissionMode || DEFAULT_PERMISSION_MODE,
     model: raw.lead?.model || DEFAULT_MODEL,
@@ -148,11 +156,7 @@ function buildConfig(raw) {
   return { lead, projects };
 }
 
-let config;
-try { config = buildConfig(readConfigFile()); } catch (err) {
-  console.error(err.message);
-  process.exit(1);
-}
+let config = buildConfig({}, null);
 const projectById = (id) => config.projects.find((p) => p.id === id);
 
 // ---------- archive ----------
@@ -208,25 +212,42 @@ function moveProject(id, archive) {
 
 // ---------- storage ----------
 
-fs.mkdirSync(LOG_DIR, { recursive: true });
-
-function loadDb() {
+function loadDb(file, cfg) {
   const chat = (id) => ({ id, sessionId: null, run: null, lastRun: null });
   let d = { seq: 0, cards: [], lead: chat('lead'), chats: {} };
-  try { d = { ...d, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
+  if (file && fs.existsSync(file)) d = { ...d, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
   d.chats ||= {};
-  for (const p of config.projects) d.chats[p.id] ||= chat(`chat-${p.id}`);
+  for (const p of cfg.projects) d.chats[p.id] ||= chat(`chat-${p.id}`);
   // Sessions belong to a folder: if Main's folder changed, start fresh.
-  if (d.lead.cwd !== config.lead.cwd) {
+  if (d.lead.cwd !== cfg.lead.cwd) {
     if (d.lead.sessionId) d.lead.sessionId = null;
-    d.lead.cwd = config.lead.cwd;
+    d.lead.cwd = cfg.lead.cwd;
   }
   return d;
 }
 
-const db = loadDb();
+let db = loadDb(null, config);
+
+// A copy of board.json per day (the board as the day's first change found
+// it), kept for BACKUP_DAYS days. Covers deleting the wrong card.
+let backedUp = null;
+function backup() {
+  const dir = path.join(BOARD_DIR, 'backups');
+  const file = path.join(dir, `board-${now().slice(0, 10)}.json`);
+  if (backedUp === file) return;
+  backedUp = file;
+  if (fs.existsSync(file) || !fs.existsSync(DB_FILE)) return;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(DB_FILE, file);
+    const old = fs.readdirSync(dir).filter((n) => /^board-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().slice(0, -BACKUP_DAYS);
+    for (const n of old) fs.rmSync(path.join(dir, n), { force: true });
+  } catch (err) { console.warn(`[amox] backup: ${err.message}`); }
+}
 
 function save() {
+  if (!DB_FILE) return; // no projects folder picked yet
+  backup();
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
   fs.renameSync(tmp, DB_FILE);
@@ -253,16 +274,89 @@ const getCard = (id) => {
   return card;
 };
 
-// Runs that were alive when the server died can't be reattached.
-for (const e of [db.lead, ...Object.values(db.chats), ...db.cards]) {
-  if (e.run?.state === 'running') {
-    e.run = null;
-    e.lastRun = { state: 'interrupted', endedAt: now() };
-    if (e.status === 'in_progress') e.status = 'ready';
-    appendLog(e.id, { kind: 'system', text: 'Interrupted (Amox restarted)' });
-  }
+// ---------- projects folders ----------
+
+function readFolders() {
+  try {
+    const f = JSON.parse(fs.readFileSync(FOLDERS_FILE, 'utf8'));
+    return { current: f.current ? path.resolve(home(f.current)) : null, recent: (f.recent || []).map((d) => path.resolve(home(d))) };
+  } catch { return null; }
 }
-save();
+
+function writeFolders(f) {
+  fs.writeFileSync(FOLDERS_FILE + '.tmp', JSON.stringify({ current: f.current && tilde(f.current), recent: f.recent.map(tilde) }, null, 2) + '\n');
+  fs.renameSync(FOLDERS_FILE + '.tmp', FOLDERS_FILE);
+}
+
+let folders = readFolders();
+
+// Opens a projects folder: its .amox (made if missing) becomes the board.
+// Everything is read before anything is swapped, so a broken projects.json
+// leaves the open folder as it was.
+function openFolder(root) {
+  const dir = path.join(root, BOARD_DIR_NAME);
+  const files = { projects: path.join(dir, 'projects.json'), db: path.join(dir, 'board.json') };
+  const cfg = buildConfig(readConfigFile(files.projects), root);
+  let next;
+  try { next = loadDb(files.db, cfg); } catch (err) { throw new Error(`${tilde(files.db)}: ${err.message}`); }
+  fs.mkdirSync(path.join(dir, 'logs'), { recursive: true });
+  // Never committed by accident when the projects folder is itself a repo.
+  if (!fs.existsSync(path.join(dir, '.gitignore'))) fs.writeFileSync(path.join(dir, '.gitignore'), '*\n');
+  BOARD_DIR = dir;
+  LOG_DIR = path.join(dir, 'logs');
+  DB_FILE = files.db;
+  PROJECTS_FILE = files.projects;
+  config = cfg;
+  db = next;
+  // Runs that were alive when the server died can't be reattached.
+  for (const e of [db.lead, ...Object.values(db.chats), ...db.cards]) {
+    if (e.run?.state === 'running') {
+      e.run = null;
+      e.lastRun = { state: 'interrupted', endedAt: now() };
+      if (e.status === 'in_progress') e.status = 'ready';
+      appendLog(e.id, { kind: 'system', text: 'Interrupted (Amox restarted)' });
+    }
+  }
+  save();
+  const recent = [root, ...(folders?.recent || []).filter((d) => d !== root)].slice(0, 8);
+  folders = { current: root, recent };
+  writeFolders(folders);
+  console.log(`[amox] projects folder: ${tilde(root)}`);
+}
+
+// Before boards lived in the projects folder, one board for everything sat in
+// STATE_DIR (data/, projects.json with lead.cwd). On the first start with
+// this version it's copied into that folder's .amox. The old files stay
+// where they were, as a backup.
+function migrateOldBoard() {
+  const oldData = path.join(STATE_DIR, 'data');
+  const oldProjects = path.join(STATE_DIR, 'projects.json');
+  if (!fs.existsSync(oldData) && !fs.existsSync(oldProjects)) return null;
+  const raw = readConfigFile(oldProjects);
+  // Its folder: lead.cwd, or for clones inside the projects folder, the
+  // repo's parent (the old default). Skip one that already has a board, e.g.
+  // a folder opened with a newer version.
+  const candidates = [raw.lead?.cwd && path.resolve(home(raw.lead.cwd)), LEGACY && path.dirname(ROOT)]
+    .filter((d) => d && fs.statSync(d, { throwIfNoEntry: false })?.isDirectory());
+  const hasBoard = (d) => ['board.json', 'projects.json'].some((f) => fs.existsSync(path.join(d, BOARD_DIR_NAME, f)));
+  const root = candidates.find((d) => !hasBoard(d));
+  if (!root) {
+    if (candidates.length) console.warn(`[amox] ${tilde(candidates[0])} already has a board, so the old one in ${tilde(STATE_DIR)} was not copied.`);
+    return candidates[0] || null;
+  }
+  const dir = path.join(root, BOARD_DIR_NAME);
+  fs.mkdirSync(dir, { recursive: true });
+  if (fs.existsSync(oldData)) {
+    fs.cpSync(oldData, dir, { recursive: true, filter: (src) => !path.basename(src).startsWith('snapshot-index-') });
+  }
+  const { cwd, ...lead } = raw.lead || {};
+  const rest = { ...raw, lead };
+  if (!Object.keys(lead).length) delete rest.lead;
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify(rest, null, 2) + '\n');
+  console.log(`[amox] copied the board from ${tilde(STATE_DIR)} to ${tilde(dir)} (the old files are left as a backup)`);
+  return root;
+}
+
 
 // ---------- live updates ----------
 
@@ -277,6 +371,7 @@ function publicState() {
   return {
     statuses: STATUSES,
     root: config.lead.cwd ? tilde(config.lead.cwd) : null, // null: not picked yet, the UI asks
+    recent: (folders?.recent || []).filter((d) => d !== config.lead.cwd && fs.existsSync(d)).map(tilde),
     projects: config.projects.map(({ id, name, path: dir }) => ({ id, name: name || id, archived: isArchivedPath(dir) })),
     cards: db.cards.map(({ baseline, ...c }) => ({ ...c, canRevert: !!baseline?.repos?.length })),
     chats: Object.fromEntries(['main', ...config.projects.map((p) => p.id)].map((key) => {
@@ -310,7 +405,7 @@ setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 25000
 // `cli.js refresh`) and after archiving; there's no timer on purpose.
 function rescan() {
   let next;
-  try { next = buildConfig(readConfigFile()); } catch (err) {
+  try { next = buildConfig(readConfigFile(), config.lead.cwd); } catch (err) {
     console.warn(`[amox] ${err.message}`);
     return;
   }
@@ -355,7 +450,7 @@ const untrackedFiles = (dir) => git(dir, 'ls-files', '--others', '--exclude-stan
 // Commit of the working copy as it is (tracked edits + untracked files), or
 // null when it matches HEAD.
 function workingCopyCommit(dir) {
-  const index = path.join(DATA_DIR, `snapshot-index-${process.pid}-${Date.now()}`);
+  const index = path.join(BOARD_DIR, `snapshot-index-${process.pid}-${Date.now()}`);
   const env = {
     ...process.env, GIT_INDEX_FILE: index,
     GIT_AUTHOR_NAME: 'amox', GIT_AUTHOR_EMAIL: 'amox@localhost',
@@ -490,10 +585,13 @@ function baseArgs({ permissionMode, model, effort }) {
 // project agents (cards and project chats) can't read or change it. Deny
 // rules apply even when permissions are skipped. Bash honors them for plain
 // file commands (cat, head); with the project's sandbox on, for everything.
-const BOARD_FILES = [path.join(DATA_DIR, '**'), PROJECTS_FILE, path.join(STATE_DIR, '.env'), path.join(ROOT, '.env')];
+// The open folder's .amox, plus STATE_DIR's files and the pre-.amox board
+// left there as a backup.
+const boardFiles = () => [path.join(BOARD_DIR, '**'), FOLDERS_FILE, path.join(STATE_DIR, '.env'), path.join(ROOT, '.env'),
+  path.join(STATE_DIR, 'data', '**'), path.join(STATE_DIR, 'projects.json')];
 // Rules take absolute paths as //path; on Windows in POSIX form (C:\x -> //c/x).
 const rulePath = (f) => (IS_WIN ? `//${f[0].toLowerCase()}${f.slice(2).replaceAll('\\', '/')}` : `/${f}`);
-const BOARD_DENY = ['Read', 'Edit', 'Write'].flatMap((tool) => [...new Set(BOARD_FILES)].map((f) => `${tool}(${rulePath(f)})`));
+const boardDeny = () => ['Read', 'Edit', 'Write'].flatMap((tool) => [...new Set(boardFiles())].map((f) => `${tool}(${rulePath(f)})`));
 
 // A project session: runs in the project folder with that project's rules.
 // extra: { env, allowedTools, unsandboxed } added on top (project chats use
@@ -501,7 +599,7 @@ const BOARD_DENY = ['Read', 'Edit', 'Write'].flatMap((tool) => [...new Set(BOARD
 // since it blocks localhost. A chained command stays fully sandboxed.
 function projectRun(entity, project, systemPrompt, prompt, extra = {}) {
   const args = [...baseArgs(project), '--append-system-prompt', systemPrompt];
-  const settings = { permissions: { deny: BOARD_DENY } };
+  const settings = { permissions: { deny: boardDeny() } };
   if (project.sandbox) {
     settings.sandbox = { enabled: true, autoAllowBashIfSandboxed: true, excludedCommands: extra.unsandboxed || [] };
   }
@@ -1014,9 +1112,15 @@ async function handle(req, res) {
     const b = await readBody(req);
     const dir = b.path && path.resolve(home(String(b.path)));
     if (!dir || !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) throw httpError(400, 'Not a folder');
-    if (db.lead.run) throw httpError(409, 'Main is busy. Stop it first.');
-    saveConfigFile({ ...readConfigFile(), lead: { ...readConfigFile().lead, cwd: tilde(dir) } });
-    rescan();
+    // Each folder has its own board, and a running agent writes to the open one.
+    if ([db.lead, ...Object.values(db.chats), ...db.cards].some((e) => e.run) || procs.size) {
+      throw httpError(409, 'Stop running and queued agents first');
+    }
+    if (dir !== config.lead.cwd) {
+      try { openFolder(dir); } catch (err) { throw httpError(400, err.message); }
+      // Every open page reloads: tabs, cards and chats all change.
+      broadcast({ type: 'reload' });
+    }
     return send(res, 200, { root: tilde(dir) });
   }
 
@@ -1060,6 +1164,20 @@ async function handle(req, res) {
   }
 
   throw httpError(404, 'Not found');
+}
+
+// Open the projects folder (after everything above is defined: opening can
+// log, and logging broadcasts).
+if (!folders) {
+  const root = migrateOldBoard();
+  folders = { current: root, recent: root ? [root] : [] };
+  if (root) writeFolders(folders);
+}
+if (folders.current) {
+  try { openFolder(folders.current); } catch (err) {
+    console.error(`[amox] can't open ${tilde(folders.current)}: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 const server = http.createServer((req, res) => {

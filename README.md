@@ -38,13 +38,21 @@ To stop Amox, press Ctrl+C in its terminal. Running cards are marked **Interrupt
 
 ## Where Amox keeps its state
 
-Everything Amox writes lives in `~/.amox`, outside the repo, so updating Amox never touches it:
+Each projects folder has its own board, kept in a hidden `.amox` folder inside it. Switch the projects folder (⚙ on Main) and the tabs, cards and chats switch with it; switch back and yours are where you left them.
 
-- `.env`: environment settings (see [Configuration](#configuration)).
-- `projects.json`: the projects folder and per-project overrides (see [Projects](#projects)).
-- `data/`: cards (`board.json`) and transcripts (`logs/`).
+- `<projects folder>/.amox/board.json`: cards and chat state.
+- `<projects folder>/.amox/logs/`: transcripts.
+- `<projects folder>/.amox/projects.json`: per-project overrides, tab order and Main's settings (see [Projects](#projects)).
+- `<projects folder>/.amox/backups/`: a copy of `board.json` per day, last 7 days. To undo a mistake, stop Amox and copy one back over `board.json`.
 
-Set `AMOX_HOME` to keep it somewhere else. A clone that already has these files in the repo folder keeps using those.
+`.amox` has its own `.gitignore`, so it's never committed if the projects folder is a repo.
+
+The server's own settings live in `~/.amox`, outside the repo, so updating Amox never touches them:
+
+- `.env`: port, host and token (see [Configuration](#configuration)).
+- `folders.json`: which projects folder is open, and recent ones.
+
+Set `AMOX_HOME` to keep them somewhere else. A clone that already has `.env` in the repo folder keeps using that. Older versions kept one board for everything next to `.env` (`data/`, `projects.json`); the first start of this version copies it into the projects folder's `.amox` and leaves the old files as a backup.
 
 ## Configuration
 
@@ -53,8 +61,7 @@ Set these in `~/.amox/.env` or in the environment:
 - `PORT`: default `4700`.
 - `HOST`: default `127.0.0.1`. Anything else (like `0.0.0.0`) requires `AMOX_TOKEN`; Amox refuses to start without it.
 - `AMOX_TOKEN`: a long random string. When set, every request needs it (see [Phone access](#phone-access)), and project agents only get access to their own project's cards. Generate one with `openssl rand -hex 32`.
-- `AMOX_HOME`: where Amox keeps its state, default `~/.amox`.
-- `DATA_DIR`, `PROJECTS_FILE`: override the data folder and the projects file, relative to `AMOX_HOME`.
+- `AMOX_HOME`: where Amox keeps `.env` and `folders.json`, default `~/.amox`.
 - `CLAUDE_BIN`: path to the `claude` executable, default `claude`.
 
 Model, effort and permissions per project are set from **⚙** in the chat pane or in `projects.json`.
@@ -78,17 +85,17 @@ macOS is what it's used on daily. Linux should work but is untested. Windows is 
 
   Revert uses git. Before a card first runs, Amox records each repo in the project folder (the folder itself, or its direct subfolders for folders that hold several repos): HEAD, branch, and your uncommitted work, saved as a hidden commit under `refs/board/` without touching your files. Revert puts it all back exactly. It refuses, changing nothing, if the card's commits were pushed or the branch changed. Changes made meanwhile from the project chat are reverted too.
 - One running card per project at a time, since they share the working tree. Others wait as Queued.
-- **Project tabs manage their own cards.** Ask a project tab to list, add, edit, move, start or reply to cards and it uses `cli.js`, but only for that project: it gets its own token, and the server refuses its requests for other projects' cards, chats and settings. Main still manages everything. The limit only holds with `AMOX_TOKEN` set (without one, any local request gets full access). Project agents (tabs and cards) also can't read or change Amox's `data/`, `projects.json` or `.env`; with `sandbox` on, that holds for every Bash command too.
-- **Main** is a Claude session in the root projects folder (picked on first start, saved as `lead.cwd` in `projects.json`). It can read every project and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
-- **If you clone Amox inside your projects folder** it becomes a project too, with its own tab. Its agents can't touch `data/`, `projects.json` or `.env`, and code changes need a restart (`npm start` again).
+- **Project tabs manage their own cards.** Ask a project tab to list, add, edit, move, start or reply to cards and it uses `cli.js`, but only for that project: it gets its own token, and the server refuses its requests for other projects' cards, chats and settings. Main still manages everything. The limit only holds with `AMOX_TOKEN` set (without one, any local request gets full access). Project agents (tabs and cards) also can't read or change the board's `.amox` folder or Amox's `.env`; with `sandbox` on, that holds for every Bash command too.
+- **Main** is a Claude session in the root projects folder (picked on first start, changed from ⚙ on Main). It can read every project and manages cards with `cli.js`. It only starts cards when you tell it to. When a card Main started or replied to ends, Amox sends Main the card's last reply and Main tells you in its tab (Main only runs when it gets a message, so it couldn't report back otherwise). Cards you start yourself don't do this. Its brief is `lead/brief.md`.
+- **If you clone Amox inside your projects folder** it becomes a project too, with its own tab. Its agents can't touch Amox's `.env`, and code changes need a restart (`npm start` again).
 
 ## Projects
 
 **Archive.** A project that is not active now can be archived from its tab (**Archive** button, asks first). Its folder moves into an `archive` folder next to it (`~/code/my-app` → `~/code/archive/my-app`), together with Claude Code's memory and sessions for that path (`~/.claude/projects/`), and `projects.json` gets the new path. In the board it goes into the **Archive** folder at the end of the tabs, and its cards leave Main. **Unarchive** moves everything back. Close the project in editors and terminals before archiving.
 
-**Discovered, not listed.** Every folder in the projects folder (`lead.cwd`) is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up when you tap **↻** (top bar), no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
+**Discovered, not listed.** Every folder in the projects folder is a project, and folders in `archive/` are archived ones. New, renamed or removed folders show up when you tap **↻** (top bar), no restart. Hidden folders and `knowledge` are skipped (`ignore` in `projects.json` to change that).
 
-`projects.json` (optional, in `~/.amox`, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
+`.amox/projects.json` in the projects folder (optional, see `projects.example.json`) only holds overrides, re-read automatically. An entry matches a folder by name and can set `id` (keeps existing cards attached), `name`, and:
 
 - `permissionMode`: default `bypassPermissions`, the same as `--dangerously-skip-permissions`. Agents never ask. Use `acceptEdits` for a project you want locked down. Main takes the same option under `lead`.
 - `model` and `effort`: default `opus` (the latest Opus) and `high`. Set them from **⚙** in the chat pane, per tab: Main's go under `lead`, a project's apply to its chat and its cards, from the next message on.
@@ -104,7 +111,7 @@ To lock a project down, set in its `projects.json` entry:
 - `"permissionMode": "acceptEdits"`: agents can edit files, and anything that would need a prompt is denied and shows in the transcript as a failed tool call. Add what you trust to `allowedTools`.
 - `"sandbox": true`: Bash runs in the OS sandbox, writes only inside the project folder, network limited to allowed domains.
 
-Deny rules in a project's `.claude/settings.json` and your Claude Code hooks still apply when permissions are skipped. Project agents can't read or change Amox's own `.env`, `projects.json` or `data/`. Set `AMOX_TOKEN` even locally if you want project agents limited to their own project's cards.
+Deny rules in a project's `.claude/settings.json` and your Claude Code hooks still apply when permissions are skipped. Project agents can't read or change Amox's own `.env` or the board's `.amox` folder. Set `AMOX_TOKEN` even locally if you want project agents limited to their own project's cards.
 
 ## Phone access
 
@@ -119,7 +126,7 @@ Easiest is [Tailscale](https://tailscale.com) on the computer and the phone: ope
 
 ## Running on a server
 
-Amox runs agents on the machine it lives on, so a server needs the repos cloned there, Node, and `claude` logged in. Pick the projects folder on first start (or set `lead.cwd` in `projects.json`), set `AMOX_TOKEN` and `HOST`, and put it behind HTTPS (Caddy, Coolify, or `tailscale serve`). An isolated machine or VM is also the safest place to let agents skip permissions.
+Amox runs agents on the machine it lives on, so a server needs the repos cloned there, Node, and `claude` logged in. Pick the projects folder on first start, set `AMOX_TOKEN` and `HOST`, and put it behind HTTPS (Caddy, Coolify, or `tailscale serve`). An isolated machine or VM is also the safest place to let agents skip permissions.
 
 ## Card CLI
 

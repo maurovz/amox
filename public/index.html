@@ -115,6 +115,11 @@
       <div id="rootRow" class="field" hidden>
         <span class="muted small">Projects folder</span>
         <div class="row"><span id="rootPath" class="path"></span><span class="grow"></span><button type="button" id="rootChange" class="btn">Change</button></div>
+        <span class="muted small">Each folder has its own board, saved in a hidden .amox folder inside it.</span>
+      </div>
+      <div id="rootRecentRow" class="field" hidden>
+        <span class="muted small">Switch to</span>
+        <div id="rootRecent" class="recent-list"></div>
       </div>
       <button class="btn primary">Save</button>
     </form>
@@ -126,7 +131,7 @@
       <button type="button" id="folderClose" class="icon" data-close aria-label="Close">✕</button>
       <strong>Where are your projects?</strong>
     </div>
-    <p class="muted small">Pick the folder that holds your projects. Each folder inside it becomes a project, and Main works from there.</p>
+    <p class="muted small">Pick the folder that holds your projects. Each folder inside it becomes a project, and Main works from there. Its board (cards, chats, settings) is saved in a hidden .amox folder inside it, so switching folders switches boards.</p>
     <div id="folderPath" class="path"></div>
     <div id="folderList" class="folder-list"></div>
     <button id="folderUse" class="btn primary">Use this folder</button>

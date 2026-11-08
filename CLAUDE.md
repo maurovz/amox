@@ -11,7 +11,7 @@ How to use it: `README.md`. Where it stands: `docs/status.md`. Why it is the way
 - `cli.js`: card commands. Main uses it; so can the user.
 - `public/`: plain HTML, CSS and JS modules. No build step.
 - `lead/brief.md`: Main's instructions, passed as a system prompt. Not a `CLAUDE.md` on purpose (see decisions).
-- State: `data/board.json` and transcripts in `data/logs/`. Config: `projects.json`, `.env`. None of these are committed.
+- State: each projects folder has its own board in `<folder>/.amox/` (`board.json`, `logs/`, `projects.json`, `backups/`). The server's `.env` and `folders.json` (open folder) live in `~/.amox` or, for this install, the repo. None of these are committed. The repo's old `data/` and `projects.json` stay as a backup of the pre-`.amox` board.
 
 ## Run
 
@@ -23,12 +23,12 @@ node --check server.js # quick syntax check; there are no tests yet
 To test without touching real projects, run a second instance with its own config and data:
 
 ```
-PORT=4799 PROJECTS_FILE=/tmp/x/projects.json DATA_DIR=/tmp/x/data node server.js
+AMOX_HOME=/tmp/x PORT=4799 node server.js   # then pick a scratch projects folder in the UI
 ```
 
 ## Rules
 
-- **Never touch `data/`, `projects.json` or `.env`.** They are the live board you may be running inside. Change behavior in code instead.
+- **Never touch `.env`, `folders.json`, `data/`, `projects.json`, or the `.amox` folder in the projects folder.** They are the live board you may be running inside. Change behavior in code instead.
 - **Never restart or kill the Amox server.** It's what runs you; restarting it interrupts every running agent. When a change needs a restart, say so at the end.
 - Phone first: every UI change must work at phone width and with touch (no hover-only, no drag-only).
 - Keep `README.md` in sync when behavior a user sees changes.

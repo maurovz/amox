@@ -338,3 +338,4 @@ dialog::backdrop { background: rgb(0 0 0 / 0.45); }
   background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 10px; z-index: 50; max-width: 90vw;
 }
 .field { display: flex; flex-direction: column; gap: 4px; }
+.recent-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; padding: 4px; }

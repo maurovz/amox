@@ -1,17 +1,17 @@
 # Status
 
-As of 2026-11-07. Getting ready to open source: first-run folder picker, state in `~/.amox`, runnable with `npx`, first Windows support.
+As of 2026-11-08. Getting ready to open source: each projects folder has its own board (`.amox` inside it), first-run folder picker, runnable with `npx`, first Windows support. The live install needs a restart to move to the per-folder board.
 
 ## Works
 
 - Board with five columns (Backlog, Ready, In progress, Review, Done). Moving a card to In progress runs a task agent in that project's folder. Reply resumes the same session, Stop kills it. One running card per project; the rest queue.
 - Chat pane: Main tab plus one tab per project, always visible on desktop (resizable, collapsible), Chat/Board toggle on phones. The active tab filters the board.
 - Main runs in `~/code` and manages cards through `cli.js`.
-- Project tabs manage their own project's cards through `cli.js` with a per-project token (refused for anything else). Project agents can't read Amox's `data/`, `projects.json`, `.env`.
+- Project tabs manage their own project's cards through `cli.js` with a per-project token (refused for anything else). Project agents can't read the board's `.amox` folder or Amox's `.env`.
 - Agents (cards, project chats, Main) skip permissions by default. Deny rules and hooks still apply. Per project, `acceptEdits` plus `sandbox` locks one down.
 - Projects are discovered from the root folder (↻ picks up new folders); `projects.json` only overrides.
 - Tab dots show activity per project (chat or card running, unread, cards in Review or failed). The ⌄ after the tabs lists all projects with a short summary; the strip fades where more tabs are hidden.
-- First start asks for the projects folder (a folder browser served by Amox); ⚙ on Main changes it. New installs keep `.env`, `projects.json` and `data/` in `~/.amox`; this install still keeps them in the repo. `package.json` has a `bin`, so `npx amox` works (tested from a packed tarball); not published yet.
+- First start asks for the projects folder (a folder browser served by Amox); ⚙ on Main changes it or switches to a recent one. Each folder keeps its own board in `<folder>/.amox` (cards, transcripts, project settings, 7 daily backups), so switching folders switches boards; refused while agents run. `.env` and `folders.json` stay in `~/.amox` (this install: the repo). The first start of this version copies the old board (`data/`, `projects.json`) into the open folder's `.amox` and leaves the old files. Tested on scratch instances (migration, switching both ways, fresh install, restart, project agent denied `.amox`); the settings dialog changes weren't checked in a browser. Demo board at `~/Desktop/amox-demo`. `package.json` has a `bin`, so `npx amox` works (tested from a packed tarball); not published yet.
 - Windows: home folder, Stop (taskkill) and deny-rule paths handled, agents spawn without a console window. Untested, labeled experimental.
 - Review: Approve, Reject (git revert, back to Ready), Redo (revert and rerun). Tested on a scratch repo: exact restore, refuses after a push.
 - Archive / unarchive a project (moves its folder and its Claude Code memory).

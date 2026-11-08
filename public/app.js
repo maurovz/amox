@@ -466,6 +466,9 @@ $('#chatSettings').addEventListener('click', () => {
   f.effort.value = cur.effort;
   $('#rootRow').hidden = tab !== 'main';
   $('#rootPath').textContent = state.root || 'Not set';
+  $('#rootRecent').innerHTML = (state.recent || []).map((d) =>
+    `<button type="button" class="prow path" data-root="${esc(d)}"><span class="pname">${esc(d)}</span></button>`).join('');
+  $('#rootRecentRow').hidden = tab !== 'main' || !state.recent?.length;
   $('#settingsTitle').textContent = `${tab === 'main' ? 'Main' : projectName(tab)} settings`;
   settingsDlg.showModal();
 });
@@ -506,11 +509,18 @@ $('#folderList').addEventListener('click', guard(async (e) => {
   const b = e.target.closest('[data-path]');
   if (b) await browse(b.dataset.path);
 }));
+// Each projects folder has its own board, so switching reloads the page
+// (the server tells every open page to).
 $('#folderUse').addEventListener('click', guard(async () => {
-  const r = await api('POST', '/api/root', { path: folderAt });
+  await api('POST', '/api/root', { path: folderAt });
   folderDlg.dataset.required = '';
   folderDlg.close();
-  toast(`Projects folder: ${r.root}`);
+}));
+$('#rootRecent').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('[data-root]');
+  if (!b) return;
+  await api('POST', '/api/root', { path: b.dataset.root });
+  settingsDlg.close();
 }));
 $('#rootChange').addEventListener('click', guard(async () => {
   settingsDlg.close();
@@ -762,6 +772,8 @@ function connect() {
       renderBoard();
       renderChatControls();
       if (openCardId) renderCardSheet(false);
+    } else if (msg.type === 'reload') {
+      location.reload();
     } else if (msg.type === 'clear') {
       const key = tabForLog(msg.id);
       if (key) unread.delete(key);

@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-08. Each projects folder has its own board
+
+Changing the projects folder only added the new folder's projects to the existing tabs: projects listed in `projects.json` stayed, and the cards stayed in one board in `data/`. The user expected plug and play: pick a folder, get its tabs and tasks. Now the board (cards, transcripts, project overrides, tab order, Main's settings) lives in `<folder>/.amox`, made on first use with a `.gitignore` of `*`. Only what belongs to the server stays global in `~/.amox`: `.env` (port, host, token, which is how the phone reaches it) and `folders.json` (open folder, recent ones). Switching is refused while any agent runs, since a run writes to the open board, and every open page reloads. The old single board is copied (not moved) into the open folder's `.amox` on the first start, so the old files remain a backup. Git history for the board was rejected: `board.json` changes on every card move and run, so it would be hundreds of meaningless commits. Instead, `backups/` keeps the day's first copy of `board.json` for 7 days. `DATA_DIR` and `PROJECTS_FILE` are gone; `AMOX_HOME` covers test instances.
+
 ## 2026-11-07. Projects folder picked in the UI, state in ~/.amox
 
 To open source Amox, setup can't depend on cloning it inside the projects folder (Main's root defaulted to the repo's parent). On first start the UI now asks where the projects are, with no guessed default. Browsers can't return a real path from the OS folder dialog, so Amox serves a small folder browser (`/api/folders`), which also works from the phone. The choice is saved as `lead.cwd`. New installs keep `.env`, `projects.json` and `data/` in `~/.amox` (`AMOX_HOME`) so `npx amox` and updates never touch them. Installs that already have them in the repo keep that, and keep the old parent-folder default, so the live board is unchanged. Windows got the cheap fixes (home folder, taskkill, deny-rule paths) and is labeled experimental, with WSL recommended.
