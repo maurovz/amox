@@ -2,6 +2,10 @@
 
 Newest first.
 
+## 2026-11-08. MIT license, first tag v0.1.0
+
+The goal is setup and consulting clients, not selling the code, so the license should get Amox tried as widely as possible. MIT is the least friction and the usual signal for a small tool; AGPL and source-available licenses put off the companies that would be clients. It can change for future versions (the author holds the copyright), but released versions stay MIT.
+
 ## 2026-11-08. Each projects folder has its own board
 
 Changing the projects folder only added the new folder's projects to the existing tabs: projects listed in `projects.json` stayed, and the cards stayed in one board in `data/`. The user expected plug and play: pick a folder, get its tabs and tasks. Now the board (cards, transcripts, project overrides, tab order, Main's settings) lives in `<folder>/.amox`, made on first use with a `.gitignore` of `*`. Only what belongs to the server stays global in `~/.amox`: `.env` (port, host, token, which is how the phone reaches it) and `folders.json` (open folder, recent ones). Switching is refused while any agent runs, since a run writes to the open board, and every open page reloads. The old single board is copied (not moved) into the open folder's `.amox` on the first start, so the old files remain a backup. Git history for the board was rejected: `board.json` changes on every card move and run, so it would be hundreds of meaningless commits. Instead, `backups/` keeps the day's first copy of `board.json` for 7 days. `DATA_DIR` and `PROJECTS_FILE` are gone; `AMOX_HOME` covers test instances.

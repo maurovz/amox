@@ -81,3 +81,7 @@ AMOX_HOME=/tmp/amox-dev PORT=4799 node server.js
 ```
 
 `server.js` is the API and agent runner, `cli.js` the card commands, `public/` the UI (no build step). Keep it dependency-free and phone-friendly.
+
+## License
+
+MIT
