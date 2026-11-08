@@ -13,6 +13,9 @@
   --user: #ebebe8;
   --code: #f0f0ee;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  /* Project label colors: muted, readable as text on --panel. */
+  --c-sage: #5d8a68; --c-slate: #5877a3; --c-clay: #b0674b; --c-plum: #8a68a3;
+  --c-ochre: #9c7f2e; --c-teal: #3d8585; --c-rose: #ad5d77; --c-olive: #767f42;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -20,6 +23,8 @@
     --bg: #121212; --panel: #1c1c1b; --col: #171716; --text: #ededeb; --muted: #9b9b96;
     --border: #2e2e2c; --accent: #ededeb; --accent-text: #121212; --danger: #ff6b5e;
     --ok: #4cc283; --warn: #e3a948; --user: #2a2a28; --code: #252524; --shadow: none;
+    --c-sage: #8dbb99; --c-slate: #8ea8d2; --c-clay: #d69a80; --c-plum: #b598cc;
+    --c-ochre: #ccb067; --c-teal: #75b3b3; --c-rose: #d38fa6; --c-olive: #a8b078;
     color-scheme: dark;
   }
 }
@@ -27,6 +32,8 @@
   --bg: #121212; --panel: #1c1c1b; --col: #171716; --text: #ededeb; --muted: #9b9b96;
   --border: #2e2e2c; --accent: #ededeb; --accent-text: #121212; --danger: #ff6b5e;
   --ok: #4cc283; --warn: #e3a948; --user: #2a2a28; --code: #252524; --shadow: none;
+  --c-sage: #8dbb99; --c-slate: #8ea8d2; --c-clay: #d69a80; --c-plum: #b598cc;
+  --c-ochre: #ccb067; --c-teal: #75b3b3; --c-rose: #d38fa6; --c-olive: #a8b078;
   color-scheme: dark;
 }
 
@@ -256,6 +263,16 @@ dialog.menu::backdrop { background: transparent; }
 .card .t { font-weight: 500; overflow-wrap: anywhere; }
 .card .meta { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 .chip { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--code); color: var(--muted); }
+/* Project colors: .pc-<name> sets --pc for chips, swatches and pickers. */
+.pc-sage { --pc: var(--c-sage); } .pc-slate { --pc: var(--c-slate); } .pc-clay { --pc: var(--c-clay); } .pc-plum { --pc: var(--c-plum); }
+.pc-ochre { --pc: var(--c-ochre); } .pc-teal { --pc: var(--c-teal); } .pc-rose { --pc: var(--c-rose); } .pc-olive { --pc: var(--c-olive); }
+.chip.proj { color: var(--pc); background: color-mix(in srgb, var(--pc) 15%, transparent); font-weight: 500; }
+.swatch { flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--pc); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatches label { position: relative; width: 36px; height: 36px; border-radius: 50%; background: var(--pc); cursor: pointer; }
+.swatches input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.swatches label:has(input:checked) { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--pc); }
+.swatches label:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 4px; }
 .badge { font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
 .badge.running { color: var(--ok); }
 .badge.queued { color: var(--warn); }

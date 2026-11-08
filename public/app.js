@@ -103,6 +103,8 @@ const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toas
 
 const projectName = (id) => state.projects.find((p) => p.id === id)?.name || id;
 const tabName = (key) => (key === 'main' ? 'Main' : projectName(key));
+const projectColor = (id) => state.projects.find((p) => p.id === id)?.color || 'sage';
+const swatch = (key) => (key === 'main' ? '' : `<span class="swatch pc-${projectColor(key)}"></span>`);
 const tabForLog = (logId) => Object.keys(state.chats).find((k) => state.chats[k].logId === logId);
 
 // ---------- view toggle (phones) ----------
@@ -134,7 +136,7 @@ function renderBoard() {
       <div class="cards">${col.map((c) => `
         <article class="card" data-id="${c.id}" draggable="${!touch}">
           <div class="t">${esc(c.title)}</div>
-          <div class="meta">${all ? `<span class="chip">${esc(projectName(c.project))}</span>` : ''}${badge(c)}</div>
+          <div class="meta">${all ? `<span class="chip proj pc-${projectColor(c.project)}">${esc(projectName(c.project))}</span>` : ''}${badge(c)}</div>
         </article>`).join('')}</div>
     </section>`;
   }).join('');
@@ -230,7 +232,7 @@ function renderTabs() {
   const tabBtn = (k, extra = '') => {
     const a = activity(k);
     const movable = k !== 'main' && !extra ? ' movable' : '';
-    return `<button class="tab${k === tab ? ' on' : ''}${extra}${movable}" data-tab="${esc(k)}" title="${esc(a.summary)}">${esc(tabName(k))}<span class="dot ${a.dot}"></span></button>`;
+    return `<button class="tab${k === tab ? ' on' : ''}${extra}${movable}" data-tab="${esc(k)}" title="${esc(a.summary)}">${swatch(k)}${esc(tabName(k))}<span class="dot ${a.dot}"></span></button>`;
   };
   const active = ['main', ...state.projects.filter((p) => !p.archived).map((p) => p.id)];
   const archived = state.projects.filter((p) => p.archived).map((p) => p.id);
@@ -288,7 +290,7 @@ const projectsDlg = $('#projectsDlg');
 function renderProjects() {
   const row = (k, extra = '') => {
     const a = activity(k);
-    return `<button class="prow${k === tab ? ' on' : ''}${extra}" data-tab="${esc(k)}"><span class="dot ${a.dot}"></span>`
+    return `<button class="prow${k === tab ? ' on' : ''}${extra}" data-tab="${esc(k)}"><span class="dot ${a.dot}"></span>${swatch(k)}`
       + `<span class="pname">${esc(tabName(k))}</span><span class="muted small">${esc(a.summary)}</span></button>`;
   };
   const active = ['main', ...state.projects.filter((p) => !p.archived).map((p) => p.id)];
@@ -465,6 +467,9 @@ $('#chatSettings').addEventListener('click', () => {
   f.model.value = cur.model;
   f.effort.value = cur.effort;
   $('#rootRow').hidden = tab !== 'main';
+  $('#colorRow').hidden = tab === 'main';
+  $('#colorPick').innerHTML = tab === 'main' ? '' : state.options.colors.map((c) =>
+    `<label class="pc-${c}" title="${c}"><input type="radio" name="color" value="${c}" aria-label="${c}"${c === projectColor(tab) ? ' checked' : ''}></label>`).join('');
   $('#rootPath').textContent = state.root || 'Not set';
   $('#rootRecent').innerHTML = (state.recent || []).map((d) =>
     `<button type="button" class="prow path" data-root="${esc(d)}"><span class="pname">${esc(d)}</span></button>`).join('');
@@ -475,7 +480,8 @@ $('#chatSettings').addEventListener('click', () => {
 $('#settingsForm').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   const f = e.target;
-  await api('POST', `/api/settings/${tab}`, { model: f.model.value, effort: f.effort.value });
+  const color = tab === 'main' ? undefined : f.elements.color?.value;
+  await api('POST', `/api/settings/${tab}`, { model: f.model.value, effort: f.effort.value, color });
   settingsDlg.close();
   toast('Saved. Applies from the next message.');
 }));

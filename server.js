@@ -50,6 +50,10 @@ const DEFAULT_PERMISSION_MODE = 'bypassPermissions';
 const MODELS = ['opus', 'opus[1m]', 'sonnet', 'haiku', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const DEFAULT_MODEL = 'opus';
+// Project label colors (muted; the values are in style.css). Each project
+// gets the first one not taken when it's first seen, kept in board.json, so
+// adding or reordering projects never changes them. ⚙ on a tab changes it.
+const COLORS = ['sage', 'slate', 'clay', 'plum', 'ochre', 'teal', 'rose', 'olive'];
 const DEFAULT_EFFORT = 'high';
 
 if (!TOKEN && !LOCAL_HOSTS.includes(HOST)) {
@@ -317,6 +321,7 @@ function openFolder(root) {
       appendLog(e.id, { kind: 'system', text: 'Interrupted (Amox restarted)' });
     }
   }
+  assignColors();
   save();
   const recent = [root, ...(folders?.recent || []).filter((d) => d !== root)].slice(0, 8);
   folders = { current: root, recent };
@@ -372,7 +377,7 @@ function publicState() {
     statuses: STATUSES,
     root: config.lead.cwd ? tilde(config.lead.cwd) : null, // null: not picked yet, the UI asks
     recent: (folders?.recent || []).filter((d) => d !== config.lead.cwd && fs.existsSync(d)).map(tilde),
-    projects: config.projects.map(({ id, name, path: dir }) => ({ id, name: name || id, archived: isArchivedPath(dir) })),
+    projects: config.projects.map(({ id, name, path: dir }) => ({ id, name: name || id, archived: isArchivedPath(dir), color: db.colors?.[id] || COLORS[0] })),
     cards: db.cards.map(({ baseline, ...c }) => ({ ...c, canRevert: !!baseline?.repos?.length })),
     chats: Object.fromEntries(['main', ...config.projects.map((p) => p.id)].map((key) => {
       const c = getChat(key);
@@ -380,7 +385,7 @@ function publicState() {
     })),
     settings: Object.fromEntries([['main', config.lead], ...config.projects.map((p) => [p.id, p])]
       .map(([key, { model, effort }]) => [key, { model, effort }])),
-    options: { models: MODELS, efforts: EFFORTS, defaults: { model: DEFAULT_MODEL, effort: DEFAULT_EFFORT } },
+    options: { models: MODELS, efforts: EFFORTS, colors: COLORS, defaults: { model: DEFAULT_MODEL, effort: DEFAULT_EFFORT } },
   };
 }
 
@@ -417,7 +422,19 @@ function rescan() {
     db.lead.cwd = config.lead.cwd;
   }
   for (const p of config.projects) db.chats[p.id] ||= { id: `chat-${p.id}`, sessionId: null, run: null, lastRun: null };
+  assignColors();
   changed();
+}
+
+// New projects take the least used color, first in COLORS order on a tie.
+function assignColors() {
+  db.colors ||= {};
+  for (const p of config.projects) {
+    if (COLORS.includes(db.colors[p.id])) continue;
+    const used = config.projects.map((x) => db.colors[x.id]);
+    const count = (c) => used.filter((u) => u === c).length;
+    db.colors[p.id] = COLORS.reduce((best, c) => (count(c) < count(best) ? c : best), COLORS[0]);
+  }
 }
 
 // ---------- agent runs ----------
@@ -1075,6 +1092,7 @@ async function handle(req, res) {
     const b = await readBody(req);
     if (!MODELS.includes(b.model)) throw httpError(400, `model must be one of ${MODELS.join(', ')}`);
     if (!EFFORTS.includes(b.effort)) throw httpError(400, `effort must be one of ${EFFORTS.join(', ')}`);
+    if (b.color !== undefined && (key === 'main' || !COLORS.includes(b.color))) throw httpError(400, `color must be one of ${COLORS.join(', ')}`);
     const patch = { model: b.model, effort: b.effort };
     const raw = readConfigFile();
     if (key === 'main') {
@@ -1089,7 +1107,9 @@ async function handle(req, res) {
       else raw.projects.push({ id: key, name: project.name || key, path: tilde(project.path), ...patch });
     }
     saveConfigFile(raw);
+    if (b.color) db.colors[key] = b.color;
     rescan();
+    changed();
     return send(res, 200, { ok: true });
   }
 
